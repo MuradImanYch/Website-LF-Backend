@@ -90,14 +90,39 @@ let ueclTopScores = [];
 let euroQualTopScores = [];
 let unlTopScores = [];
 
+// db MYSQL
+const db = require('mysql');
+
+const con = db.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'legfootball'
+});
+
+con.connect(function(err) {
+    if (err) throw err;
+    console.log("Connected to DB!");
+});
+
+con.on('error', function(err) {
+    console.log(err);
+});
+
 const parsing = async () => {
     const cyrillicToTranslit = new CyrillicToTranslit();
 
-    app.get('/uefaCountryRankSeason', (req, res) => {
-        res.send(uefaCountryRankSeason);
+    con.query('SELECT * FROM uefacountryrankseason', (err, result) => {
+        if(err) throw err;
+        app.get('/uefaCountryRankSeason', (req, res) => {
+            res.send(result);
+        });
     });
-    app.get('/uefaCountryRank', (req, res) => {
-        res.send(uefaCountryRank);
+    con.query('SELECT * FROM uefacountryrank', (err, result) => {
+        if(err) throw err;
+        app.get('/uefaCountryRank', (req, res) => {
+            res.send(result);
+        });
     });
     app.get('/transferNews', (req, res) => {
         res.send(transferNews);
@@ -292,6 +317,26 @@ const parsing = async () => {
         });
     })
     .catch(err => console.log(err));
+
+    // delete then insert in DB uefacountryrankseason
+    con.query('DELETE FROM uefacountryrankseason', (err, result) => {
+        if(err) throw err;
+    });
+
+    con.query(`INSERT INTO uefacountryrankseason (seasonLast5, seasonLast4, seasonLast3, seasonLast2, seasonCurrent) VALUES ('${uefaCountryRankSeason[0].seasonLast5}', '${uefaCountryRankSeason[0].seasonLast4}', '${uefaCountryRankSeason[0].seasonLast3}', '${uefaCountryRankSeason[0].seasonLast2}', '${uefaCountryRankSeason[0].seasonCurrent}')`, (err, result) => {
+        if(err) throw err;
+    });
+
+    // delete then insert in DB uefacountryrank
+    con.query('DELETE FROM uefacountryrank', (err, result) => {
+        if(err) throw err;
+    });
+
+    uefaCountryRank.map((e) => {
+        con.query(`INSERT INTO uefacountryrank (place, flag, name, total, quantity, totalLast5, totalLast4, totalLast3, totalLast2, totalCurrent) VALUES ('${e.place}', '${e.flag}', '${e.name}', '${e.total}', '${e.quantity}', '${e.totalLast5}', '${e.totalLast4}', '${e.totalLast3}', '${e.totalLast2}', '${e.totalCurrent}')`, (err, result) => {
+            if(err) throw err;
+        });
+    });
 
     await axios.get('https://footballhd.ru/allnews/') // transfer news
     .then(response => response.data)
