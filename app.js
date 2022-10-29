@@ -1,268 +1,272 @@
 const express = require('express');
-const app = express();
 const PORT = process.env.PORT || 8888;
 const cheerio = require('cheerio');
 const axios = require('axios');
 const CyrillicToTranslit = require('cyrillic-to-translit-js');
 const iconv = require('iconv-lite');
 const fetch = require('node-fetch');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const db = require('mysql');
+const path = require('path');
+const multer = require('multer');
 
-let uefaCountryRank = [];
-let uefaCountryRankSeason = [];
-let transferNews = [];
-let transferList = [];
-let mainNews = [];
-let mainNews2 = [];
-let mainSlider = [];
-let mainNews3 = [];
-let mainNews4 = [];
-let mainNews5 = [];
-let videoNews = [];
-let rplStandings = [];
-let eplStandings = [];
-let laligaStandings = [];
-let bundesligaStandings = [];
-let serieaStandings = [];
-let ligue1Standings = [];
-let endedMatches = [];
-let forecasts = [];
-let matchesSlider = [];
-let matchesSliderCoefLinks = [];
-let matchesSliderCoefsW1 = [];
-let matchesSliderCoefsD = [];
-let matchesSliderCoefsW2 = [];
-let teams = ["Челси", "Манчестер Сити", "Манчестер Юнайтед", "Ливерпуль", "Арсенал", "Тоттенхэм", "Барселона", "Атлетико Мадрид", "Реал Мадрид", "Севилья", "ПСЖ", "Марсель", "Лион", "Монако", "Ювентус", "Интер", "Милан", "Лацио", "Аталанта", "Наполи", "Рома", "Бавария", "Боруссия Дортмунд", "РБ Лейпциг", "Зенит", "ЦСКА Москва", "Спартак", "Краснодар", "Локомотив Москва", "Динамо Москва", "Шахтер", "Динамо Киев", "Заря", "Порту", "Бенфика", "Спортинг Лиссабон", "Брага", "ПСВ", "Аякс", "Фейеноорд", "Кайрат", "Астана", "Карабах Агдам", "Нефтчи", "Шериф", "Фенербахче", "Бешикташ", "Галатасарай", "БАТЭ", "Динамо Минск", "Пахтакор", "Насаф", "Динамо Тбилиси", "Динамо Батуми", "Пюник", "Алашкерт", "Рига", "РФШ", "Жальгирис", "Судува", "Флора", "Левадия", "Дордой", "Абдыш-Ата", "Истиклол Душанбе", "Худжанд", "Алтын Асыр", "Ахал", "Россия", "Испания", "Франция", "Аргентина", "Португалия", "Бразилия", "Германия", "Бельгия", "Англия", "Италия", "Мексика", "Уругвай", "США", "Хорватия", "Сенегал", "Япония", "Камерун", "Алжир", "Турция", "Нидерланды", "Украина", "Азербайджан", "Южная Корея", "Грузия", "Казахстан", "Беларусь", "Узбекистан", "Молдова", "Армения", "Кыргызстан", "Кыргызстан", "Литва", "Латвия", "Эстония", "Туркменистан"];
-let matchesSliderLeagueNameRoundDate = [];
-let matchesSliderStadiums = [];
-let matchesSliderVenue = [];
-let matchesSliderReferee = [];
-let matchesSliderWeatherIco = [];
-let matchesSliderWeatherDescr = [];
-let uclStandingsA = [];
-let uclStandingsB = [];
-let uclStandingsC = [];
-let uclStandingsD = [];
-let uclStandingsE = [];
-let uclStandingsF = [];
-let uclStandingsG = [];
-let uclStandingsH = [];
-let uelStandingsA = [];
-let uelStandingsB = [];
-let uelStandingsC = [];
-let uelStandingsD = [];
-let uelStandingsE = [];
-let uelStandingsF = [];
-let uelStandingsG = [];
-let uelStandingsH = [];
-let ueclStandingsA = [];
-let ueclStandingsB = [];
-let ueclStandingsC = [];
-let ueclStandingsD = [];
-let ueclStandingsE = [];
-let ueclStandingsF = [];
-let ueclStandingsG = [];
-let ueclStandingsH = [];
-let liveMatches = [];
-let liveMatchesLinks = [];
-let liveMatchesLeagueNameRoundDate = [];
-let rplTopScores = [];
-let eplTopScores = [];
-let laligaTopScores = [];
-let bundesligaTopScores = [];
-let serieaTopScores = [];
-let ligue1TopScores = [];
-let mainSliderLinks = [];
-let mainSliderPostContent = [];
-let transferNewsLinks = [];
-let transferNewsPostContent = [];
-let mainNews2Links = [];
-let mainNews2PostContent = [];
-let mainNews3Links = [];
-let mainNews3PostContent = [];
-let mainNews4Links = [];
-let mainNews4PostContent = [];
-let mainNews5Links = [];
-let mainNews5PostContent = [];
-let mainNewsLinks = [];
-let mainNewsPostContent = [];
-let uclTopScores = [];
-let uelTopScores = [];
-let ueclTopScores = [];
-let euroQualTopScores = [];
-let unlTopScores = [];
+const app = express();
+app.use(bodyParser.urlencoded({extended: true}));
+app.use(cors());
+app.use(express.json());
+
+const con = db.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'legfootball'
+});
+con.connect(err => {
+    if(err) throw err;
+    console.log('Connected to DB');
+});
+
+// admin
+app.post('/addNews', (req, res) => {
+    con.query('INSERT INTO news (league, title, img, content) VALUES(?, ?, ?, ?)', [req.body.league, req.body.title, req.body.img, req.body.content], (err => {
+        if(err) throw err;
+    }));
+});
+app.post('/delNews', (req, res) => {
+    con.query(`DELETE FROM news WHERE id = ${+req.body.id}`);
+});
+app.post('/findEditedNews', (req, res) => {
+    con.query(`SELECT * FROM news WHERE id = ${req.body.id}`, (err, result) => {
+        if(err) throw err;
+        res.send(result);
+    });
+});
+app.post('/editNews', (req, res) => {
+    con.query(`UPDATE news SET league = '${req.body.league}', title = '${req.body.title}', img = '${req.body.img}', content = '${req.body.content}' WHERE id = '${req.body.id}'`, (err, result) => {
+        if(err) throw err;
+    });
+});
+
+let uefaCountryRank = [],
+    uefaCountryRankSeason = [],
+    transferList = [],
+    videoNews = [],
+    rplStandings = [],
+    eplStandings = [],
+    laligaStandings = [],
+    bundesligaStandings = [],
+    serieaStandings = [],
+    ligue1Standings = [],
+    endedMatches = [],
+    forecasts = [],
+    matchesSlider = [],
+    matchesSliderCoefLinks = [],
+    matchesSliderCoefsW1 = [],
+    matchesSliderCoefsD = [],
+    matchesSliderCoefsW2 = [],
+    teams = ["Челси", "Манчестер Сити", "Манчестер Юнайтед", "Ливерпуль", "Арсенал", "Тоттенхэм", "Барселона", "Атлетико Мадрид", "Реал Мадрид", "Севилья", "ПСЖ", "Марсель", "Лион", "Монако", "Ювентус", "Интер", "Милан", "Лацио", "Аталанта", "Наполи", "Рома", "Бавария", "Боруссия Дортмунд", "РБ Лейпциг", "Зенит", "ЦСКА Москва", "Спартак", "Краснодар", "Локомотив Москва", "Динамо Москва", "Шахтер", "Динамо Киев", "Заря", "Порту", "Бенфика", "Спортинг Лиссабон", "Брага", "ПСВ", "Аякс", "Фейеноорд", "Кайрат", "Астана", "Карабах Агдам", "Нефтчи", "Шериф", "Фенербахче", "Бешикташ", "Галатасарай", "БАТЭ", "Динамо Минск", "Пахтакор", "Насаф", "Динамо Тбилиси", "Динамо Батуми", "Пюник", "Алашкерт", "Рига", "РФШ", "Жальгирис", "Судува", "Флора", "Левадия", "Дордой", "Абдыш-Ата", "Истиклол Душанбе", "Худжанд", "Алтын Асыр", "Ахал", "Россия", "Испания", "Франция", "Аргентина", "Португалия", "Бразилия", "Германия", "Бельгия", "Англия", "Италия", "Мексика", "Уругвай", "США", "Хорватия", "Сенегал", "Япония", "Камерун", "Алжир", "Турция", "Нидерланды", "Украина", "Азербайджан", "Южная Корея", "Грузия", "Казахстан", "Беларусь", "Узбекистан", "Молдова", "Армения", "Кыргызстан", "Кыргызстан", "Литва", "Латвия", "Эстония", "Туркменистан"],
+    matchesSliderLeagueNameRoundDate = [],
+    matchesSliderStadiums = [],
+    matchesSliderVenue = [],
+    matchesSliderReferee = [],
+    matchesSliderWeatherIco = [],
+    matchesSliderWeatherDescr = [],
+    uclStandingsA = [],
+    uclStandingsB = [],
+    uclStandingsC = [],
+    uclStandingsD = [],
+    uclStandingsE = [],
+    uclStandingsF = [],
+    uclStandingsG = [],
+    uclStandingsH = [],
+    uelStandingsA = [],
+    uelStandingsB = [],
+    uelStandingsC = [],
+    uelStandingsD = [],
+    uelStandingsE = [],
+    uelStandingsF = [],
+    uelStandingsG = [],
+    uelStandingsH = [],
+    ueclStandingsA = [],
+    ueclStandingsB = [],
+    ueclStandingsC = [],
+    ueclStandingsD = [],
+    ueclStandingsE = [],
+    ueclStandingsF = [],
+    ueclStandingsG = [],
+    ueclStandingsH = [],
+    liveMatches = [],
+    liveMatchesLinks = [],
+    liveMatchesLeagueNameRoundDate = [],
+    rplTopScores = [],
+    eplTopScores = [],
+    laligaTopScores = [],
+    bundesligaTopScores = [],
+    serieaTopScores = [],
+    ligue1TopScores = [],
+    uclTopScores = [],
+    uelTopScores = [],
+    ueclTopScores = [],
+    euroQualTopScores = [],
+    unlTopScores = []
 
 app.get('/liveMatches', (req, res) => {
     res.send(liveMatches);
 });
+app.get('/uefaCountryRankSeason', (req, res) => {
+    res.send(uefaCountryRankSeason);
+});
+app.get('/uefaCountryRank', (req, res) => {
+    res.send(uefaCountryRank);
+});
+app.get('/transferList', (req, res) => {
+    res.send(transferList);
+});
+app.get('/myNews', (req, res) => {
+    con.query('SELECT * FROM news', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/videoNews', (req, res) => {
+    res.send(videoNews);
+});
+app.get('/rplStandings', (req, res) => {
+    res.send(rplStandings);
+});
+app.get('/eplStandings', (req, res) => {
+    res.send(eplStandings);
+});
+app.get('/laligaStandings', (req, res) => {
+    res.send(laligaStandings);
+});
+app.get('/bundesligaStandings', (req, res) => {
+    res.send(bundesligaStandings);
+});
+app.get('/serieaStandings', (req, res) => {
+    res.send(serieaStandings);
+});
+app.get('/ligue1Standings', (req, res) => {
+    res.send(ligue1Standings);
+});
+app.get('/endedMatches', (req, res) => {
+    res.send(endedMatches);
+});
+app.get('/forecasts', (req, res) => {
+    res.send(forecasts);
+});
+app.get('/matchesSlider', (req, res) => {
+    res.send(matchesSlider);
+});
+app.get('/uclStandingsA', (req, res) => {
+    res.send(uclStandingsA);
+});
+app.get('/uclStandingsB', (req, res) => {
+    res.send(uclStandingsB);
+});
+app.get('/uclStandingsC', (req, res) => {
+    res.send(uclStandingsC);
+});
+app.get('/uclStandingsD', (req, res) => {
+    res.send(uclStandingsD);
+});
+app.get('/uclStandingsE', (req, res) => {
+    res.send(uclStandingsE);
+});
+app.get('/uclStandingsF', (req, res) => {
+    res.send(uclStandingsF);
+});
+app.get('/uclStandingsG', (req, res) => {
+    res.send(uclStandingsG);
+});
+app.get('/uclStandingsH', (req, res) => {
+    res.send(uclStandingsH);
+});
+app.get('/uelStandingsA', (req, res) => {
+    res.send(uelStandingsA);
+});
+app.get('/uelStandingsB', (req, res) => {
+    res.send(uelStandingsB);
+});
+app.get('/uelStandingsC', (req, res) => {
+    res.send(uelStandingsC);
+});
+app.get('/uelStandingsD', (req, res) => {
+    res.send(uelStandingsD);
+});
+app.get('/uelStandingsE', (req, res) => {
+    res.send(uelStandingsE);
+});
+app.get('/uelStandingsF', (req, res) => {
+    res.send(uelStandingsF);
+});
+app.get('/uelStandingsG', (req, res) => {
+    res.send(uelStandingsG);
+});
+app.get('/uelStandingsH', (req, res) => {
+    res.send(uelStandingsH);
+});
+app.get('/ueclStandingsA', (req, res) => {
+    res.send(ueclStandingsA);
+});
+app.get('/ueclStandingsB', (req, res) => {
+    res.send(ueclStandingsB);
+});
+app.get('/ueclStandingsC', (req, res) => {
+    res.send(ueclStandingsC);
+});
+app.get('/ueclStandingsD', (req, res) => {
+    res.send(ueclStandingsD);
+});
+app.get('/ueclStandingsE', (req, res) => {
+    res.send(ueclStandingsE);
+});
+app.get('/ueclStandingsF', (req, res) => {
+    res.send(ueclStandingsF);
+});
+app.get('/ueclStandingsG', (req, res) => {
+    res.send(ueclStandingsG);
+});
+app.get('/ueclStandingsH', (req, res) => {
+    res.send(ueclStandingsH);
+});
+app.get('/rplTopScores', (req, res) => {
+    res.send(rplTopScores);
+});
+app.get('/eplTopScores', (req, res) => {
+    res.send(eplTopScores);
+});
+app.get('/laligaTopScores', (req, res) => {
+    res.send(laligaTopScores);
+});
+app.get('/bundesligaTopScores', (req, res) => {
+    res.send(bundesligaTopScores);
+});
+app.get('/serieaTopScores', (req, res) => {
+    res.send(serieaTopScores);
+});
+app.get('/ligue1TopScores', (req, res) => {
+    res.send(ligue1TopScores);
+});
+app.get('/uclTopScores', (req, res) => {
+    res.send(uclTopScores);
+});
+app.get('/uelTopScores', (req, res) => {
+    res.send(uelTopScores);
+});
+app.get('/ueclTopScores', (req, res) => {
+    res.send(ueclTopScores);
+});
+app.get('/euroQualTopScores', (req, res) => {
+    res.send(euroQualTopScores);
+});
+app.get('/unlTopScores', (req, res) => {
+    res.send(unlTopScores);
+});
 
 const parsing = async () => {
     const cyrillicToTranslit = new CyrillicToTranslit();
-
-    app.get('/uefaCountryRankSeason', (req, res) => {
-        res.send(uefaCountryRankSeason);
-    });
-    app.get('/uefaCountryRank', (req, res) => {
-        res.send(uefaCountryRank);
-    });
-    app.get('/transferNews', (req, res) => {
-        res.send(transferNews);
-    });
-    app.get('/transferList', (req, res) => {
-        res.send(transferList);
-    });
-    app.get('/mainNews', (req, res) => {
-        res.send(mainNews);
-    });
-    app.get('/mainNews2', (req, res) => {
-        res.send(mainNews2);
-    });
-    app.get('/mainSlider', (req, res) => {
-        res.send(mainSlider);
-    });
-    app.get('/mainNews3', (req, res) => {
-        res.send(mainNews3);
-    });
-    app.get('/mainNews4', (req, res) => {
-        res.send(mainNews4);
-    });
-    app.get('/mainNews5', (req, res) => {
-        res.send(mainNews5);
-    });
-    app.get('/videoNews', (req, res) => {
-        res.send(videoNews);
-    });
-    app.get('/rplStandings', (req, res) => {
-        res.send(rplStandings);
-    });
-    app.get('/eplStandings', (req, res) => {
-        res.send(eplStandings);
-    });
-    app.get('/laligaStandings', (req, res) => {
-        res.send(laligaStandings);
-    });
-    app.get('/bundesligaStandings', (req, res) => {
-        res.send(bundesligaStandings);
-    });
-    app.get('/serieaStandings', (req, res) => {
-        res.send(serieaStandings);
-    });
-    app.get('/ligue1Standings', (req, res) => {
-        res.send(ligue1Standings);
-    });
-    app.get('/endedMatches', (req, res) => {
-        res.send(endedMatches);
-    });
-    app.get('/forecasts', (req, res) => {
-        res.send(forecasts);
-    });
-    app.get('/matchesSlider', (req, res) => {
-        res.send(matchesSlider);
-    });
-    app.get('/uclStandingsA', (req, res) => {
-        res.send(uclStandingsA);
-    });
-    app.get('/uclStandingsB', (req, res) => {
-        res.send(uclStandingsB);
-    });
-    app.get('/uclStandingsC', (req, res) => {
-        res.send(uclStandingsC);
-    });
-    app.get('/uclStandingsD', (req, res) => {
-        res.send(uclStandingsD);
-    });
-    app.get('/uclStandingsE', (req, res) => {
-        res.send(uclStandingsE);
-    });
-    app.get('/uclStandingsF', (req, res) => {
-        res.send(uclStandingsF);
-    });
-    app.get('/uclStandingsG', (req, res) => {
-        res.send(uclStandingsG);
-    });
-    app.get('/uclStandingsH', (req, res) => {
-        res.send(uclStandingsH);
-    });
-    app.get('/uelStandingsA', (req, res) => {
-        res.send(uelStandingsA);
-    });
-    app.get('/uelStandingsB', (req, res) => {
-        res.send(uelStandingsB);
-    });
-    app.get('/uelStandingsC', (req, res) => {
-        res.send(uelStandingsC);
-    });
-    app.get('/uelStandingsD', (req, res) => {
-        res.send(uelStandingsD);
-    });
-    app.get('/uelStandingsE', (req, res) => {
-        res.send(uelStandingsE);
-    });
-    app.get('/uelStandingsF', (req, res) => {
-        res.send(uelStandingsF);
-    });
-    app.get('/uelStandingsG', (req, res) => {
-        res.send(uelStandingsG);
-    });
-    app.get('/uelStandingsH', (req, res) => {
-        res.send(uelStandingsH);
-    });
-    app.get('/ueclStandingsA', (req, res) => {
-        res.send(ueclStandingsA);
-    });
-    app.get('/ueclStandingsB', (req, res) => {
-        res.send(ueclStandingsB);
-    });
-    app.get('/ueclStandingsC', (req, res) => {
-        res.send(ueclStandingsC);
-    });
-    app.get('/ueclStandingsD', (req, res) => {
-        res.send(ueclStandingsD);
-    });
-    app.get('/ueclStandingsE', (req, res) => {
-        res.send(ueclStandingsE);
-    });
-    app.get('/ueclStandingsF', (req, res) => {
-        res.send(ueclStandingsF);
-    });
-    app.get('/ueclStandingsG', (req, res) => {
-        res.send(ueclStandingsG);
-    });
-    app.get('/ueclStandingsH', (req, res) => {
-        res.send(ueclStandingsH);
-    });
-    app.get('/rplTopScores', (req, res) => {
-        res.send(rplTopScores);
-    });
-    app.get('/eplTopScores', (req, res) => {
-        res.send(eplTopScores);
-    });
-    app.get('/laligaTopScores', (req, res) => {
-        res.send(laligaTopScores);
-    });
-    app.get('/bundesligaTopScores', (req, res) => {
-        res.send(bundesligaTopScores);
-    });
-    app.get('/serieaTopScores', (req, res) => {
-        res.send(serieaTopScores);
-    });
-    app.get('/ligue1TopScores', (req, res) => {
-        res.send(ligue1TopScores);
-    });
-    app.get('/uclTopScores', (req, res) => {
-        res.send(uclTopScores);
-    });
-    app.get('/uelTopScores', (req, res) => {
-        res.send(uelTopScores);
-    });
-    app.get('/ueclTopScores', (req, res) => {
-        res.send(ueclTopScores);
-    });
-    app.get('/euroQualTopScores', (req, res) => {
-        res.send(euroQualTopScores);
-    });
-    app.get('/unlTopScores', (req, res) => {
-        res.send(unlTopScores);
-    });
 
     await axios.get('https://terrikon.com/football/uefa_coefs') // last 5 uefa season || uefa rank
     .then(response => response.data)
@@ -295,37 +299,6 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://footballhd.ru/allnews/') // transfer news
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('#dle-content .sh_art').each((i, element) => {
-            transferNews.push({
-                title: $(element).find('h2 a').text(),
-                date: $(element).find('.date').text(),
-                img: $(element).find('h2 .mg img').attr('src'),
-                src: $(element).find('h2 a').attr('href'),
-                id: cyrillicToTranslit.transform($(element).find('h2 a').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && transferNewsLinks.push(`https://footballhd.ru/allnews/${$(element).find('h2 a').attr('href')}`); // push transfer news links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of transferNewsLinks) {
-        await axios.get(`${e}`) // transferNews | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                transferNewsPostContent.push($('.txtbloc').html()); // scraping post text
-                transferNews = transferNews.map((item, index) => ({ ...item,
-                    description: transferNewsPostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
     await axios.get('https://soccer365.ru/transfers/') // popular transfer list
     .then(response => response.data)
     .then(response => {
@@ -344,192 +317,6 @@ const parsing = async () => {
         });
     })
     .catch(err => console.log(err));
-
-    await axios.get('https://www.sports.ru/') // main news
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('article').each((i, element) => {
-            mainNews.push({
-                title: $(element).find('h2 a').text(),
-                src: $(element).find('h2 a').attr('href'),
-                img: $(element).find('a img').attr('data-src'),
-                date: $(element).find('.time-block_top').text(),
-                id: cyrillicToTranslit.transform($(element).find('h2 a').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && mainNewsLinks.push($(element).find('h2 a').attr('href')); // push main news links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of mainNewsLinks) {
-        await axios.get(`${e}`) // mainNews | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                mainNewsPostContent.push($('.material-item__content').html()); // scraping post text
-                mainNews = mainNews.map((item, index) => ({ ...item,
-                    description: mainNewsPostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
-    await axios.get('https://www.championat.com/') // main news 2
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('.article-preview-list .article-preview').each((i, element) => {
-            mainNews2.push({
-                title: $(element).find('.article-preview__info a:nth-child(1)').text(),
-                src: $(element).find('.article-preview__info a').attr('href'),
-                img: $(element).find('.article-preview__img a img').attr('data-src'),
-                date: $(element).find('.article-preview__info .article-preview__details .article-preview__date').text(),
-                id: cyrillicToTranslit.transform($(element).find('.article-preview__info a:nth-child(1)').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && mainNews2Links.push($(element).find('.article-preview__info a').attr('href')); // push main news 2 links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of mainNews2Links) {
-        await axios.get(`${e}`) // mainNews2 | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                mainNews2PostContent.push($('.lp_article_content').html()); // scraping post text
-                mainNews2 = mainNews2.map((item, index) => ({ ...item,
-                    description: mainNews2PostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
-    await axios.get('https://footballhd.ru/articles/') // main slider
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('#art_list .sh_art').each((i, element) => {
-            mainSlider.push({
-                title: $(element).find('h2 a u').text(),
-                src: $(element).find('h2 a').attr('href'),
-                img: $(element).find('h2 a b img').attr('src'),
-                date: $(element).find('span i').text(),
-                id: cyrillicToTranslit.transform($(element).find('h2 a u').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && mainSliderLinks.push(`https://footballhd.ru/articles/${$(element).find('h2 a').attr('href')}`); // push main slider links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of mainSliderLinks) {
-        await axios.get(`${e}`) // mainSlider | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                mainSliderPostContent.push($('.txtbloc').html()); // scraping post text
-                mainSlider = mainSlider.map((item, index) => ({ ...item,
-                    description: mainSliderPostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
-    await axios.get('https://www.euro-football.ru/') // main news 3
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('.additional-content-item').each((i, element) => {
-            mainNews3.push({
-                title: $(element).find('.additional-content-item__content a').text(),
-                src: $(element).find('.additional-content-item__content a').attr('href'),
-                img: $(element).find('.additional-content-item a img').attr('src'),
-                date: $(element).find('.additional-content-item__content .additional-content-item__content-date').text(),
-                id: cyrillicToTranslit.transform($(element).find('.additional-content-item__content a').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && mainNews3Links.push($(element).find('.additional-content-item__content a').attr('href')); // push main news 3 links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of mainNews3Links) {
-        await axios.get(`${e}`) // mainNews3 | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                mainNews3PostContent.push($('.article__text').html()); // scraping post text
-                mainNews3 = mainNews3.map((item, index) => ({ ...item,
-                    description: mainNews3PostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
-    await axios.get('https://www.championat.com/football/_other.html') // main news 4
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('.article-preview').each((i, element) => {
-            mainNews4.push({
-                title: $(element).find('.article-preview__info a').text(),
-                src: $(element).find('.article-preview__info a').attr('href'),
-                img: $(element).find('.article-preview__img a img').attr('data-src'),
-                date: $(element).find('.article-preview__info .article-preview__details .article-preview__date').text(),
-                id: cyrillicToTranslit.transform($(element).find('.article-preview__info a').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && mainNews4Links.push($(element).find('.article-preview__info a').attr('href')); // push main news 4 links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of mainNews4Links) {
-        await axios.get(`${e}`) // mainNews4 | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                mainNews4PostContent.push($('.lp_article_content').html()); // scraping post text
-                mainNews4 = mainNews4.map((item, index) => ({ ...item,
-                    description: mainNews4PostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
-    await axios.get('https://sport.business-gazeta.ru/') // main news 5
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('.line-article').each((i, element) => {
-            mainNews5.push({
-                title: $(element).find('h5').text(),
-                src: $(element).find('a').attr('href'),
-                img: $(element).find('a .image-container img').attr('data-src'),
-                date: $(element).find('div div div div div div > div span').text(),
-                id: cyrillicToTranslit.transform($(element).find('h5').text(), '-').replace(',', '').replace('.', '').replace('«', '').replace('»', '').replace('-', '').replace('–', '').replace(':', '').replace('»', '').replace('«', '').toLowerCase()
-            }) && mainNews5Links.push($(element).find('a').attr('href')); // push main news 5 links;
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of mainNews5Links) {
-        await axios.get(`${e}`) // mainNews5 | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                mainNews5PostContent.push($('#app > div.container.container-body > div > div > div:nth-child(2) > div.article-first-col > section > div.article__content > div:nth-child(5)').html()); // scraping post text
-                mainNews5 = mainNews5.map((item, index) => ({ ...item,
-                    description: mainNews5PostContent[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
 
     await axios.get('https://football-video.org/') // news video
     .then(response => response.data)
@@ -1656,14 +1443,7 @@ liveParsing();
 setInterval(() => {
     uefaCountryRank.splice(0, uefaCountryRank.length);
     uefaCountryRankSeason.splice(0, uefaCountryRankSeason.length);
-    transferNews.splice(0, transferNews.length);
     transferList.splice(0, transferList.length);
-    mainNews.splice(0, mainNews.length);
-    mainNews2.splice(0, mainNews2.length);
-    mainSlider.splice(0, mainSlider.length);
-    mainNews3.splice(0, mainNews3.length);
-    mainNews4.splice(0, mainNews4.length);
-    mainNews5.splice(0, mainNews5.length);
     videoNews.splice(0, videoNews.length);
     rplStandings.splice(0, rplStandings.length);
     eplStandings.splice(0, eplStandings.length);
@@ -1706,13 +1486,6 @@ setInterval(() => {
     serieaTopScores.splice(0, serieaTopScores.length);
     ligue1TopScores.splice(0, ligue1TopScores.length);
     liveMatchesLinks.splice(0, liveMatchesLinks.length);
-    mainSliderLinks.splice(0, mainSliderLinks.length);
-    transferNewsLinks.splice(0, transferNewsLinks.length);
-    mainNews2Links.splice(0, mainNews2Links.length);
-    mainNews3Links.splice(0, mainNews3Links.length);
-    mainNews4Links.splice(0, mainNews4Links.length);
-    mainNews5Links.splice(0, mainNews5Links.length);
-    mainNewsLinks.splice(0, mainNewsLinks.length);
     uclTopScores.splice(0, uclTopScores.length);
     uelTopScores.splice(0, uelTopScores.length);
     ueclTopScores.splice(0, ueclTopScores.length);
