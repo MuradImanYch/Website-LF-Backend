@@ -8,8 +8,6 @@ const fetch = require('node-fetch');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const db = require('mysql');
-const path = require('path');
-const multer = require('multer');
 
 const app = express();
 app.use(bodyParser.urlencoded({extended: true}));
@@ -29,7 +27,7 @@ con.connect(err => {
 
 // admin
 app.post('/addNews', (req, res) => {
-    con.query('INSERT INTO news (league, title, img, content) VALUES(?, ?, ?, ?)', [req.body.league, req.body.title, req.body.img, req.body.content], (err => {
+    con.query('INSERT INTO news (category, title, img, content) VALUES(?, ?, ?, ?)', [req.body.category, req.body.title, req.body.img, req.body.content], (err => {
         if(err) throw err;
     }));
 });
@@ -43,7 +41,7 @@ app.post('/findEditedNews', (req, res) => {
     });
 });
 app.post('/editNews', (req, res) => {
-    con.query(`UPDATE news SET league = '${req.body.league}', title = '${req.body.title}', img = '${req.body.img}', content = '${req.body.content}' WHERE id = '${req.body.id}'`, (err, result) => {
+    con.query(`UPDATE news SET category = '${req.body.category}', title = '${req.body.title}', img = '${req.body.img}', content = '${req.body.content}' WHERE id = '${req.body.id}'`, (err, result) => {
         if(err) throw err;
     });
 });
@@ -108,8 +106,21 @@ let uefaCountryRank = [],
     uclTopScores = [],
     uelTopScores = [],
     ueclTopScores = [],
-    euroQualTopScores = [],
-    unlTopScores = []
+    unlTopScores = [],
+    unlStandingsA1 = [],
+    unlStandingsA2 = [],
+    unlStandingsA3 = [],
+    unlStandingsA4 = [],
+    unlStandingsB1 = [],
+    unlStandingsB2 = [],
+    unlStandingsB3 = [],
+    unlStandingsB4 = [],
+    unlStandingsC1 = [],
+    unlStandingsC2 = [],
+    unlStandingsC3 = [],
+    unlStandingsC4 = [],
+    unlStandingsD1 = [],
+    unlStandingsD2 = []
 
 app.get('/liveMatches', (req, res) => {
     res.send(liveMatches);
@@ -123,8 +134,20 @@ app.get('/uefaCountryRank', (req, res) => {
 app.get('/transferList', (req, res) => {
     res.send(transferList);
 });
-app.get('/myNews', (req, res) => {
+app.get('/allNews', (req, res) => {
     con.query('SELECT * FROM news', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/mainNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category NOT IN ("blog", "video")', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/blogs', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "blog"', ((err, result) => {
         if(err) throw err;
         res.send(result);
     }));
@@ -258,11 +281,50 @@ app.get('/uelTopScores', (req, res) => {
 app.get('/ueclTopScores', (req, res) => {
     res.send(ueclTopScores);
 });
-app.get('/euroQualTopScores', (req, res) => {
-    res.send(euroQualTopScores);
-});
 app.get('/unlTopScores', (req, res) => {
     res.send(unlTopScores);
+});
+app.get('/unlStandingsA1', (req, res) => {
+    res.send(unlStandingsA1);
+});
+app.get('/unlStandingsA2', (req, res) => {
+    res.send(unlStandingsA2);
+});
+app.get('/unlStandingsA3', (req, res) => {
+    res.send(unlStandingsA3);
+});
+app.get('/unlStandingsA4', (req, res) => {
+    res.send(unlStandingsA4);
+});
+app.get('/unlStandingsB1', (req, res) => {
+    res.send(unlStandingsB1);
+});
+app.get('/unlStandingsB2', (req, res) => {
+    res.send(unlStandingsB2);
+});
+app.get('/unlStandingsB3', (req, res) => {
+    res.send(unlStandingsB3);
+});
+app.get('/unlStandingsB4', (req, res) => {
+    res.send(unlStandingsB4);
+});
+app.get('/unlStandingsC1', (req, res) => {
+    res.send(unlStandingsC1);
+});
+app.get('/unlStandingsC2', (req, res) => {
+    res.send(unlStandingsC2);
+});
+app.get('/unlStandingsC3', (req, res) => {
+    res.send(unlStandingsC3);
+});
+app.get('/unlStandingsC4', (req, res) => {
+    res.send(unlStandingsC4);
+});
+app.get('/unlStandingsD1', (req, res) => {
+    res.send(unlStandingsD1);
+});
+app.get('/unlStandingsD2', (req, res) => {
+    res.send(unlStandingsD2);
 });
 
 const parsing = async () => {
@@ -1130,6 +1192,314 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings A1
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
+            unlStandingsA1.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings A2
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(4) > table > tbody tr').each((i, element) => {
+            unlStandingsA2.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings A3
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(6) > table > tbody tr').each((i, element) => {
+            unlStandingsA3.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings A4
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(8) > table > tbody tr').each((i, element) => {
+            unlStandingsA4.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings B1
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(10) > table > tbody tr').each((i, element) => {
+            unlStandingsB1.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings B2
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(12) > table > tbody tr').each((i, element) => {
+            unlStandingsB2.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings B3
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(14) > table > tbody tr').each((i, element) => {
+            unlStandingsB3.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings B4
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(16) > table > tbody tr').each((i, element) => {
+            unlStandingsB4.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings C1
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(18) > table > tbody tr').each((i, element) => {
+            unlStandingsC1.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings C2
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(20) > table > tbody tr').each((i, element) => {
+            unlStandingsC2.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings C3
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(22) > table > tbody tr').each((i, element) => {
+            unlStandingsC3.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings C4
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(24) > table > tbody tr').each((i, element) => {
+            unlStandingsC4.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings D1
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(26) > table > tbody tr').each((i, element) => {
+            unlStandingsD1.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.liveresult.ru/football/UEFA-Nations-League/standings') // unl standings D2
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#t5072-regular-overall-table > div:nth-child(28) > table > tbody tr').each((i, element) => {
+            unlStandingsD2.push({
+                name: $(element).find('.name a').text(),
+                description: $(element).find('.num').attr('title'),
+                place: $(element).find('.num').text(),
+                logo: $(element).find('.team-icon img').attr('src'),
+                games: $(element).find('.score').eq(0).text(),
+                goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
+                goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
+                points: $(element).find('.score').eq(5).text(),
+                group: $(element).parent().parent().parent().prev('h3').text(),
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
     const rplTopScoresRes = await fetch( // rplTopScores
     'https://www.sport-express.ru/football/L/russia/premier/2022-2023/statistics/bombardiers/'
     );
@@ -1346,30 +1716,6 @@ const parsing = async () => {
         });
     });
 
-    // const euroqualTopScoresRes = await fetch( // euroqualTopScores
-    //     ''
-    // );
-    // const euroqualTopScoresCharset = (euroqualTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-    // const euroqualTopScoresBuf = await euroqualTopScoresRes.arrayBuffer();
-    // const euroqualTopScoresHtml = iconv.decode(
-    //     Buffer.from(euroqualTopScoresBuf),
-    //     euroqualTopScoresCharset || 'windows-1251'
-    // );
-    // const $euroqualTopScores = cheerio.load(euroqualTopScoresHtml);
-
-    // $euroqualTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr:nth-child(1)').each((i, element) => {
-    //     euroqualTopScores.push({
-    //         place: $euroqualTopScores(element).find('.se19-table-statistics__td--place').text(),
-    //         img: $euroqualTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-    //         player: $euroqualTopScores(element).find('.se19-table-statistics__td--name a').text(),
-    //         games: $euroqualTopScores(element).find('td').eq(4).text(),
-    //         goals: $euroqualTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-    //         assists: '(' + $euroqualTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-    //         tLogo: $euroqualTopScores(element).find('td:nth-child(4) div img').attr('src'),
-    //         tName: $euroqualTopScores(element).find('td:nth-child(4) div a').text()
-    //     });
-    // });
-
     const unlTopScoresRes = await fetch( // unlTopScores
         'https://www.sport-express.ru/football/N/nation-league/stats/bombardiers/'
     );
@@ -1489,8 +1835,21 @@ setInterval(() => {
     uclTopScores.splice(0, uclTopScores.length);
     uelTopScores.splice(0, uelTopScores.length);
     ueclTopScores.splice(0, ueclTopScores.length);
-    euroQualTopScores.splice(0, euroQualTopScores.length);
     unlTopScores.splice(0, unlTopScores.length);
+    unlStandingsA1.splice(0, unlStandingsA1.length);
+    unlStandingsA2.splice(0, unlStandingsA2.length);
+    unlStandingsA3.splice(0, unlStandingsA3.length);
+    unlStandingsA4.splice(0, unlStandingsA4.length);
+    unlStandingsB1.splice(0, unlStandingsB1.length);
+    unlStandingsB2.splice(0, unlStandingsB2.length);
+    unlStandingsB3.splice(0, unlStandingsB3.length);
+    unlStandingsB4.splice(0, unlStandingsB4.length);
+    unlStandingsC1.splice(0, unlStandingsC1.length);
+    unlStandingsC2.splice(0, unlStandingsC2.length);
+    unlStandingsC3.splice(0, unlStandingsC3.length);
+    unlStandingsC4.splice(0, unlStandingsC4.length);
+    unlStandingsD1.splice(0, unlStandingsD1.length);
+    unlStandingsD2.splice(0, unlStandingsD2.length);
 
     parsing();
 }, 120000);
