@@ -63,7 +63,7 @@ let uefaCountryRank = [],
     matchesSliderCoefsW1 = [],
     matchesSliderCoefsD = [],
     matchesSliderCoefsW2 = [],
-    teams = ["Челси", "Манчестер Сити", "Манчестер Юнайтед", "Ливерпуль", "Арсенал", "Тоттенхэм", "Барселона", "Атлетико Мадрид", "Реал Мадрид", "Севилья", "ПСЖ", "Марсель", "Лион", "Монако", "Ювентус", "Интер", "Милан", "Лацио", "Аталанта", "Наполи", "Рома", "Бавария", "Боруссия Дортмунд", "РБ Лейпциг", "Зенит", "ЦСКА Москва", "Спартак", "Краснодар", "Локомотив Москва", "Динамо Москва", "Шахтер", "Динамо Киев", "Заря", "Порту", "Бенфика", "Спортинг Лиссабон", "Брага", "ПСВ", "Аякс", "Фейеноорд", "Кайрат", "Астана", "Карабах Агдам", "Нефтчи", "Шериф", "Фенербахче", "Бешикташ", "Галатасарай", "БАТЭ", "Динамо Минск", "Пахтакор", "Насаф", "Динамо Тбилиси", "Динамо Батуми", "Пюник", "Алашкерт", "Рига", "РФШ", "Жальгирис", "Судува", "Флора", "Левадия", "Дордой", "Абдыш-Ата", "Истиклол Душанбе", "Худжанд", "Алтын Асыр", "Ахал", "Россия", "Испания", "Франция", "Аргентина", "Португалия", "Бразилия", "Германия", "Бельгия", "Англия", "Италия", "Мексика", "Уругвай", "США", "Хорватия", "Сенегал", "Япония", "Камерун", "Алжир", "Турция", "Нидерланды", "Украина", "Азербайджан", "Южная Корея", "Грузия", "Казахстан", "Беларусь", "Узбекистан", "Молдова", "Армения", "Кыргызстан", "Кыргызстан", "Литва", "Латвия", "Эстония", "Туркменистан"],
+    teams = ["Челси", "Манчестер Сити", "Манчестер Юнайтед", "Ливерпуль", "Арсенал", "Тоттенхэм", "Барселона", "Атлетико Мадрид", "Реал Мадрид", "Севилья", "ПСЖ", "Марсель", "Лион", "Монако", "Ювентус", "Интер", "Милан", "Лацио", "Аталанта", "Наполи", "Рома", "Бавария", "Боруссия Дортмунд", "РБ Лейпциг", "Зенит", "ЦСКА Москва", "Спартак", "Краснодар", "Локомотив Москва", "Динамо Москва", "Шахтер", "Динамо Киев", "Заря", "Порту", "Бенфика", "Спортинг Лиссабон", "Брага", "ПСВ", "Аякс", "Фейеноорд", "Кайрат", "Астана", "Карабах Агдам", "Нефтчи", "Шериф", "Фенербахче", "Бешикташ", "Галатасарай", "БАТЭ", "Динамо Минск", "Пахтакор", "Насаф", "Динамо Тбилиси", "Динамо Батуми", "Пюник", "Алашкерт", "Рига", "РФШ", "Жальгирис", "Судува", "Флора", "Левадия", "Дордой", "Абдыш-Ата", "Истиклол Душанбе", "Худжанд", "Алтын Асыр", "Ахал", "Россия", "Испания", "Франция", "Аргентина", "Португалия", "Бразилия", "Германия", "Бельгия", "Англия", "Италия", "Мексика", "Уругвай", "США", "Хорватия", "Сенегал", "Япония", "Камерун", "Алжир", "Турция", "Нидерланды", "Украина", "Азербайджан", "Южная Корея", "Грузия", "Казахстан", "Беларусь", "Узбекистан", "Молдова", "Армения", "Кыргызстан", "Кыргызстан", "Литва", "Латвия", "Эстония", "Туркменистан", "Катар"],
     matchesSliderLeagueNameRoundDate = [],
     matchesSliderStadiums = [],
     matchesSliderVenue = [],
@@ -120,7 +120,9 @@ let uefaCountryRank = [],
     unlStandingsC3 = [],
     unlStandingsC4 = [],
     unlStandingsD1 = [],
-    unlStandingsD2 = []
+    unlStandingsD2 = [],
+    matchesSchedule = [],
+    fifaRanking = []
 
 app.get('/liveMatches', (req, res) => {
     res.send(liveMatches);
@@ -153,7 +155,82 @@ app.get('/blogs', (req, res) => {
     }));
 });
 app.get('/videoNews', (req, res) => {
-    res.send(videoNews);
+    con.query('SELECT * FROM news WHERE category = "video"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/rplNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "rpl"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/eplNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "epl"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/laligaNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "laliga"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/serieaNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "seriea"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/bundesligaNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "bundesliga"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/ligue1News', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "ligue1"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/uclNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "ucl"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/uelNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "uel"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/ueclNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "uecl"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/wcNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "wc"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/ecNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "ec"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/unlNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "unl"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
 });
 app.get('/rplStandings', (req, res) => {
     res.send(rplStandings);
@@ -325,6 +402,12 @@ app.get('/unlStandingsD1', (req, res) => {
 });
 app.get('/unlStandingsD2', (req, res) => {
     res.send(unlStandingsD2);
+});
+app.get('/matchesSchedule', (req, res) => {
+    res.send(matchesSchedule);
+});
+app.get('/fifaRanking', (req, res) => {
+    res.send(fifaRanking);
 });
 
 const parsing = async () => {
@@ -533,7 +616,7 @@ const parsing = async () => {
                 aName: $(element).find('a .result .at .name .img16 span').text() === '' ? $(element).find('a .result .at .name').text() : $(element).find('a .result .at .name .img16 span').text(),
                 hLogo: $(element).find('a .result .ht .name .img16 img').attr('src'),
                 aLogo: $(element).find('a .result .at .name .img16 img').attr('src'),
-                lLogo: $(element).find('a').parent().parent().find('div:first-child a .img16 img').attr('src') === '' ? $(element).find('a').parent().parent().find('div:first-child .img16 img').attr('src') : $(element).find('a').parent().parent().find('div:first-child a .img16 img').attr('src'),
+                lLogo: $(element).find('a').parent().parent().find('div:first-child a .img16 img').attr('src') === undefined ? $(element).find('a').parent().parent().find('div:first-child .img16 img').attr('src') : $(element).find('a').parent().parent().find('div:first-child a .img16 img').attr('src'),
                 lName: $(element).find('a').parent().parent().find('div:first-child a .img16 span').text() === '' ? $(element).find('a').parent().parent().find('div:first-child .img16 span').text() : $(element).find('a').parent().parent().find('div:first-child a .img16 span').text(),
                 lRound: $(element).find('a .stage').text(),
                 hScore: $(element).find('a .result .ht .gls').text(),
@@ -599,7 +682,7 @@ const parsing = async () => {
                         aName: $(element).find('.game_block a .result .at .name .img16 span').text(),
                         hLogo: $(element).find('.game_block a .result .ht .name .img16 img').attr('src'),
                         aLogo: $(element).find('.game_block a .result .at .name .img16 img').attr('src'),
-                        lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src')
+                        lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src') || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 img').attr('src')
                     }) && matchesSliderCoefLinks.push(`https://soccer365.ru${$(element).find('a').attr('href')}`); // push coef links
                 });
             });
@@ -641,7 +724,7 @@ const parsing = async () => {
                     stadium: matchesSliderStadiums[index]
                 }));
 
-                matchesSliderVenue.push($('#preview > div.block_body > div.preview_item.st > span.min_gray').text()); // scraping venue
+                matchesSliderVenue.push($('#preview > div.block_body > div.preview_item.st > span:nth-child(3)').text()); // scraping venue
                 matchesSlider = matchesSlider.map((item, index) => ({ ...item,
                     venue: matchesSliderVenue[index]
                 }));
@@ -651,12 +734,12 @@ const parsing = async () => {
                     refree: matchesSliderReferee[index]
                 }));
 
-                $('#preview > div.block_body > div.preview_item.st > span.prview_weath_tmp').attr('style') &&matchesSliderWeatherIco.push($('#preview > div.block_body > div.preview_item.st > span.prview_weath_tmp').attr('style').slice(22, $('#preview > div.block_body > div.preview_item.st > span.prview_weath_tmp').attr('style').length - 2)); // scraping weather ico
+                matchesSliderWeatherIco.push($('#preview > div.block_body > div.preview_item.st > div.img16.weath_tmp > img').attr('src')); // scraping weather ico
                 matchesSlider = matchesSlider.map((item, index) => ({ ...item,
                     weatherIco: matchesSliderWeatherIco[index]
                 }));
 
-                matchesSliderWeatherDescr.push($('#preview > div.block_body > div.preview_item.st > span.prview_weath_tmp').text()); // scraping weather ico
+                matchesSliderWeatherDescr.push($('#preview > div.block_body > div.preview_item.st > div.img16.weath_tmp > span').text() + ' | ' + $('#preview > div.block_body > div.preview_item.st > span:nth-child(5)').text()); // scraping weather ico
                 matchesSlider = matchesSlider.map((item, index) => ({ ...item,
                     weatherDescr: matchesSliderWeatherDescr[index]
                 }));
@@ -1500,6 +1583,21 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
+    await axios.get('https://soccer365.ru/tv/') // matches schedule
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content .tv_item').each((i, element) => {
+            matchesSchedule.push({
+                programme: $(element).find('.tv_programme').text().replace(/(\r\n|\n|\r|\t)/gm,""),
+                channel: $(element).find('.tv_channel a img').attr('src'),
+                time: $(element).find('.tv_start').text().replace(/(\r\n|\n|\r|\t)/gm,"")
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
     const rplTopScoresRes = await fetch( // rplTopScores
     'https://www.sport-express.ru/football/L/russia/premier/2022-2023/statistics/bombardiers/'
     );
@@ -1757,8 +1855,8 @@ const liveParsing = async () => {
                 aName: $(element).find('.game_block a .result .at .name .img16 span').text() === '' ? $(element).find('.game_block a .result .at .name').text() : $(element).find('.game_block a .result .at .name .img16 span').text(),
                 hLogo: $(element).find('.game_block a .result .ht .name .img16 img').attr('src'),
                 aLogo: $(element).find('.game_block a .result .at .name .img16 img').attr('src'),
-                lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src') === '' ? $(element).find('.game_block a').parent().parent().find('div:first-child .img16 img').attr('src') : $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src'),
-                lName: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 span').text() === '' ? $(element).find('.game_block a').parent().parent().find('div:first-child .img16 span').text() : $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 span').text(),
+                lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src') || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 img').attr('src'),
+                lName: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 span').text() || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 span').text(),
                 time: $(element).find('.game_block a .status').text(),
                 hScore: $(element).find('.game_block a .result .ht .gls').text(),
                 aScore: $(element).find('.game_block a .result .at .gls').text()
@@ -1780,6 +1878,25 @@ const liveParsing = async () => {
             })
             .catch(err => console.log(err));
     }
+
+    await axios.get('https://soccer365.ru/ranking/fifa/') // fifa ranking
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#rankings > tbody tr').each((i, element) => {
+            fifaRanking.push({
+                name: $(element).find('td:nth-child(3) > a > span').text(),
+                place: $(element).find('td.tb_center.tb_place').text(),
+                difference: $(element).find('td.tb_center.tb_diff > span').text(),
+                flag: $(element).find('td:nth-child(3) > a > span').css('background-image').replace(/^url\(['"](.+)['"]\)/, '$1'),
+                points: $(element).find('td:nth-child(4) > b').text(),
+                pointsDiff: $(element).find('td:nth-child(5)').text(),
+                association: $(element).find('td:nth-child(6)').text()
+            });
+        });
+    })
+    .catch(err => console.log(err));
 
     return true;
 }
@@ -1850,6 +1967,8 @@ setInterval(() => {
     unlStandingsC4.splice(0, unlStandingsC4.length);
     unlStandingsD1.splice(0, unlStandingsD1.length);
     unlStandingsD2.splice(0, unlStandingsD2.length);
+    matchesSchedule.splice(0, matchesSchedule.length);
+    fifaRanking.splice(0, fifaRanking.length);
 
     parsing();
 }, 120000);
