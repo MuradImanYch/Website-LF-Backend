@@ -1,5 +1,5 @@
 const express = require('express');
-const PORT = process.env.PORT || 8888;
+const PORT = process.env.PORT || 8080;
 const cheerio = require('cheerio');
 const axios = require('axios');
 const CyrillicToTranslit = require('cyrillic-to-translit-js');
@@ -49,7 +49,6 @@ app.post('/editNews', (req, res) => {
 let uefaCountryRank = [],
     uefaCountryRankSeason = [],
     transferList = [],
-    videoNews = [],
     rplStandings = [],
     eplStandings = [],
     laligaStandings = [],
@@ -122,7 +121,27 @@ let uefaCountryRank = [],
     unlStandingsD1 = [],
     unlStandingsD2 = [],
     matchesSchedule = [],
-    fifaRanking = []
+    fifaRanking = [],
+    euroQualStandingsA = [],
+    euroQualStandingsB = [],
+    euroQualStandingsC = [],
+    euroQualStandingsD = [],
+    euroQualStandingsE = [],
+    euroQualStandingsF = [],
+    euroQualStandingsG = [],
+    euroQualStandingsH = [],
+    euroQualStandingsI = [],
+    euroQualStandingsJ = [],
+    transferListRpl = [],
+    transferListEpl = [],
+    transferListLaliga = [],
+    transferListSeriea = [],
+    transferListBundesliga = [],
+    transferListLigue1 = [],
+    rplSeasonInfo,
+    rplLastWinner,
+    rplMostWinner
+    
 
 app.get('/liveMatches', (req, res) => {
     res.send(liveMatches);
@@ -228,6 +247,18 @@ app.get('/ecNews', (req, res) => {
 });
 app.get('/unlNews', (req, res) => {
     con.query('SELECT * FROM news WHERE category = "unl"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/transferNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "transfer"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+});
+app.get('/otherNews', (req, res) => {
+    con.query('SELECT * FROM news WHERE category = "other"', ((err, result) => {
         if(err) throw err;
         res.send(result);
     }));
@@ -409,6 +440,80 @@ app.get('/matchesSchedule', (req, res) => {
 app.get('/fifaRanking', (req, res) => {
     res.send(fifaRanking);
 });
+app.get('/euroQualStandingsA', (req, res) => {
+    res.send(euroQualStandingsA);
+});
+app.get('/euroQualStandingsB', (req, res) => {
+    res.send(euroQualStandingsB);
+});
+app.get('/euroQualStandingsC', (req, res) => {
+    res.send(euroQualStandingsC);
+});
+app.get('/euroQualStandingsD', (req, res) => {
+    res.send(euroQualStandingsD);
+});
+app.get('/euroQualStandingsE', (req, res) => {
+    res.send(euroQualStandingsE);
+});
+app.get('/euroQualStandingsF', (req, res) => {
+    res.send(euroQualStandingsF);
+});
+app.get('/euroQualStandingsG', (req, res) => {
+    res.send(euroQualStandingsG);
+});
+app.get('/euroQualStandingsH', (req, res) => {
+    res.send(euroQualStandingsH);
+});
+app.get('/euroQualStandingsI', (req, res) => {
+    res.send(euroQualStandingsI);
+});
+app.get('/euroQualStandingsJ', (req, res) => {
+    res.send(euroQualStandingsJ);
+});
+app.post('/postPoll', (req, res) => {
+    con.query('INSERT INTO poll (clientIP, choise) VALUES(?, ?)', [req.body.clientIP, req.body.choiseVal], (err => {
+        if(err) throw err;
+    }));
+});
+app.get('/getPollYes', (req, res) => {
+    con.query(`SELECT * FROM poll WHERE choise="yes"`, (err, result) => {
+        if(err) throw err;
+        res.send(result);
+    });
+});
+app.get('/getPollNo', (req, res) => {
+    con.query(`SELECT * FROM poll WHERE choise="no"`, (err, result) => {
+        if(err) throw err;
+        res.send(result);
+    });
+});
+app.get('/transferListRpl', (req, res) => {
+    res.send(transferListRpl);
+});
+app.get('/transferListEpl', (req, res) => {
+    res.send(transferListEpl);
+});
+app.get('/transferListLaliga', (req, res) => {
+    res.send(transferListLaliga);
+});
+app.get('/transferListSeriea', (req, res) => {
+    res.send(transferListSeriea);
+});
+app.get('/transferListBundesliga', (req, res) => {
+    res.send(transferListBundesliga);
+});
+app.get('/transferListLigue1', (req, res) => {
+    res.send(transferListLigue1);
+});
+app.get('/rplSeasonInfo', (req, res) => {
+    res.send(rplSeasonInfo);
+});
+app.get('/rplLastWinner', (req, res) => {
+    res.send(rplLastWinner);
+});
+app.get('/rplMostWinner', (req, res) => {
+    res.send(rplMostWinner);
+});
 
 const parsing = async () => {
     const cyrillicToTranslit = new CyrillicToTranslit();
@@ -444,47 +549,168 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://soccer365.ru/transfers/') // popular transfer list
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
+    for(let i = 1; i <= 5; i++) {
+        await axios.get(`https://soccer365.ru/transfers/&p=${i}`) // popular transfer list
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
 
-        $('tbody tr').each((i, element) => {
-            transferList.push({
-                img: $(element).find('.pl_info img').attr('src'),
-                name: $(element).find('.pl_info .name div span').text(),
-                clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
-                clubInName: $(element).find('.gray div:nth-child(2) span').text(),
-                price: $(element).find('.green').text()
+            $('tbody tr').each((i, element) => {
+                transferList.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
             });
-        });
-    })
-    .catch(err => console.log(err));
+        })
+        .catch(err => console.log(err));
 
-    await axios.get('https://football-video.org/') // news video
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=1&prd=2022-1&p=${i}`) // popular transfer list rpl
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
 
-        $('.row-last-videos1 figure').each((i, element) => {
-            videoNews.push({
-                title: $(element).find('.figure-wrap1 .bottom-figure-wrapper1 .nazv1 a').text(),
-                src: $(element).find('.figure-wrap1 .bottom-figure-wrapper1 .nazv1 a').attr('href'),
-                img: $(element).find('.figure-wrap1 a .image-wrapper1 img').attr('data-src'),
-                date: $(element).find('.figure-wrap1 .bottom-figure-wrapper1 .datespan1').text()
+            $('tbody tr').each((i, element) => {
+                transferListRpl.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
             });
-        });
-    })
-    .catch(err => console.log(err));
+        })
+        .catch(err => console.log(err));
+
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=3&prd=2022-1&p=${i}`) // popular transfer list epl
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
+
+            $('tbody tr').each((i, element) => {
+                transferListEpl.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
+            });
+        })
+        .catch(err => console.log(err));
+
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=4&prd=2022-1&p=${i}`) // popular transfer list laliga
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
+
+            $('tbody tr').each((i, element) => {
+                transferListLaliga.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
+            });
+        })
+        .catch(err => console.log(err));
+
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=2&prd=2022-1&p=${i}`) // popular transfer list serie a
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
+
+            $('tbody tr').each((i, element) => {
+                transferListSeriea.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
+            });
+        })
+        .catch(err => console.log(err));
+
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=6&prd=2022-1&p=${i}`) // popular transfer list bundesliga
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
+
+            $('tbody tr').each((i, element) => {
+                transferListBundesliga.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
+            });
+        })
+        .catch(err => console.log(err));
+
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=7&prd=2022-1&p=${i}`) // popular transfer list ligue 1
+        .then(response => response.data)
+        .then(response => {
+            const $ = cheerio.load(response);
+
+            $('tbody tr').each((i, element) => {
+                transferListLigue1.push({
+                    img: $(element).find('.pl_info img').attr('src'),
+                    name: $(element).find('.pl_info .name div span').text(),
+                    flag: $(element).find('.pl_info .name div img').attr('src'),
+                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    date: $(element).find('td:nth-child(3)').text(),
+                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
+                    clubIn: $(element).find('.gray div:nth-child(2) img').attr('src'),
+                    clubInName: $(element).find('.gray div:nth-child(2) span').text(),
+                    price: $(element).find('.green').text()
+                });
+            });
+        })
+        .catch(err => console.log(err));
+    }
 
     await axios.get('https://www.liveresult.ru/football/Russia/Premier-League/standings') // rpl standings
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.tab-content tbody tr').each((i, element) => {
+        $('.tab-content .active tbody tr').each((i, element) => {
             rplStandings.push({
                 name: $(element).find('.name a').text(),
                 place: $(element).find('.num').text(),
@@ -494,7 +720,10 @@ const parsing = async () => {
                 goalsFor: $(element).find('.score').eq(4).text().split('-')[0],
                 goalsAgainst: $(element).find('.score').eq(4).text().split('-')[1],
                 points: $(element).find('.score').eq(5).text(),
-                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1)
+                descrLat: cyrillicToTranslit.transform($(element).find('.num').attr('title'), ' ').split(" ").slice(-1),
+                win: $(element).find('.score').eq(1).text(),
+                draw: $(element).find('.score').eq(2).text(),
+                lose: $(element).find('.score').eq(3).text()
             });
         });
     })
@@ -505,7 +734,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.tab-content tbody tr').each((i, element) => {
+        $('.tab-content .active tbody tr').each((i, element) => {
             eplStandings.push({
                 name: $(element).find('.name a').text(),
                 place: $(element).find('.num').text(),
@@ -526,7 +755,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.tab-content tbody tr').each((i, element) => {
+        $('.tab-content .active tbody tr').each((i, element) => {
             laligaStandings.push({
                 name: $(element).find('.name a').text(),
                 place: $(element).find('.num').text(),
@@ -547,7 +776,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.tab-content tbody tr').each((i, element) => {
+        $('.tab-content .active tbody tr').each((i, element) => {
             bundesligaStandings.push({
                 name: $(element).find('.name a').text(),
                 place: $(element).find('.num').text(),
@@ -568,7 +797,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.tab-content tbody tr').each((i, element) => {
+        $('.tab-content .active tbody tr').each((i, element) => {
             serieaStandings.push({
                 name: $(element).find('.name a').text(),
                 place: $(element).find('.num').text(),
@@ -589,7 +818,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.tab-content tbody tr').each((i, element) => {
+        $('.tab-content .active tbody tr').each((i, element) => {
             ligue1Standings.push({
                 name: $(element).find('.name a').text(),
                 place: $(element).find('.num').text(),
@@ -650,21 +879,30 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://kushvsporte.ru/freeforcats/sports/football') // forecasts
+    await axios.get('https://legalbet.ru/match-center/') // forecasts
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('.betsList').each((i, element) => {
-            forecasts.push({
-                hName: $(element).find('.itemBet .bodyBet a .align-items-center div:nth-child(2) .medium-text').text(),
-                aName: $(element).find('.itemBet .bodyBet a .align-items-center div:nth-child(6) .medium-text').text(),
-                hLogo: $(element).find('.itemBet .bodyBet a .align-items-center div:nth-child(3) img').attr('src'),
-                aLogo: $(element).find('.itemBet .bodyBet a .align-items-center div:nth-child(5) img').attr('src'),
-                lName: $(element).find('.itemBet .bodyBet div:nth-child(1) div:nth-child(2) a').text(),
-                date: $(element).find('.itemBet .bodyBet a .align-items-center div:nth-child(4) div:nth-child(1) div:nth-child(1)').text(),
-                prediction: $(element).find('div .footerBet div div:nth-child(1) div div:nth-child(1) div span a').text(),
-                coefficient: $(element).find('div .footerBet div div:nth-child(2) div:nth-child(1) a div span').text()
+        $('.matches-table-block').each((i, element) => {
+            $(element).find('.match-sport-type .icon-football').parent().nextUntil('.match-sport-type').each((i, element) => {
+                $(element).find('.match-table__item').each((i, element) => {
+                    forecasts.push({
+                        hName: $(element).find('.match-table__row .match-table__info a .match-table__team:nth-child(1) .match-table__team-name').text(),
+                        aName: $(element).find('.match-table__row .match-table__info a .match-table__team:nth-child(2) .match-table__team-name').text(),
+                        date: $(element).parent().parent().find('.heading-3').text(),
+                        time: $(element).find('.match-table__row .match-table__info .match-table__time').text(),
+                        hLogo: $(element).find('.match-table__row .match-table__info a .match-table__team:nth-child(1) .match-table__team-logo img').attr('src'),
+                        aLogo: $(element).find('.match-table__row .match-table__info a .match-table__team:nth-child(2) .match-table__team-logo img').attr('src'),
+                        lName: $(element).parent().find('.match-table__header .match-table__info .match-table__league a:last-child').text(),
+                        lCountryName: $(element).parent().find('.match-table__header .match-table__info .match-table__league .icon').text(),
+                        w1: $(element).find('.match-table__row .match-table__kefs .match-table__kefs-group:nth-child(1) .match-table__tooltip:nth-child(1) a .kef-btn__kef').text(),
+                        draw: $(element).find('.match-table__row .match-table__kefs .match-table__kefs-group:nth-child(1) .match-table__tooltip:nth-child(2) a .kef-btn__kef').text(),
+                        w2: $(element).find('.match-table__row .match-table__kefs .match-table__kefs-group:nth-child(1) .match-table__tooltip:nth-child(3) a .kef-btn__kef').text(),
+                        tu: $(element).find('.match-table__row .match-table__kefs .match-table__kefs-group:nth-child(2) .match-table__tooltip:nth-child(1) a .kef-btn__kef').text(),
+                        to: $(element).find('.match-table__row .match-table__kefs .match-table__kefs-group:nth-child(2) .match-table__tooltip:nth-child(2) a .kef-btn__kef').text()
+                    });
+                });
             });
         });
     })
@@ -747,7 +985,7 @@ const parsing = async () => {
             .catch(err => console.log(err));
     }
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (A)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (A)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -769,7 +1007,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (B)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (B)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -791,7 +1029,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (C)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (C)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -813,7 +1051,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (D)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (D)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -835,7 +1073,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (E)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (E)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -857,7 +1095,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (F)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (F)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -879,7 +1117,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (G)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (G)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -901,7 +1139,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (H)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (H)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1837,6 +2075,216 @@ const parsing = async () => {
             tName: $unlTopScores(element).find('td:nth-child(4) .name a').text()
         });
     });
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings A
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(9) tbody tr').each((i, element) => {
+            euroQualStandingsA.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings B
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(11) tbody tr').each((i, element) => {
+            euroQualStandingsB.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings C
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(13) tbody tr').each((i, element) => {
+            euroQualStandingsC.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings D
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(15) tbody tr').each((i, element) => {
+            euroQualStandingsD.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings E
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(17) tbody tr').each((i, element) => {
+            euroQualStandingsE.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings F
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(19) tbody tr').each((i, element) => {
+            euroQualStandingsF.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings G
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(21) tbody tr').each((i, element) => {
+            euroQualStandingsG.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings H
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(23) tbody tr').each((i, element) => {
+            euroQualStandingsH.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings I
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(25) tbody tr').each((i, element) => {
+            euroQualStandingsI.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/24/') // euro qual standings J
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('#main_container > div.page_main_content > div > table:nth-child(27) tbody tr').each((i, element) => {
+            euroQualStandingsJ.push({
+                name: $(element).find('td:nth-child(2) > div > span > a').text(),
+                descrClass: $(element).find('td:nth-child(1) > div').attr('class').split(' ')[2],
+                place: $(element).find('td:nth-child(1) > div').text(),
+                logo: $(element).find('td:nth-child(2) > div > img').attr('src'),
+                games: $(element).find('td:nth-child(3)').text(),
+                goalsFor: $(element).find('td:nth-child(7)').text(),
+                goalsAgainst: $(element).find('td:nth-child(8)').text(),
+                points: $(element).find('td:nth-child(10) b').text(),
+                group: $(element).parent().parent().find('.stngs_hdr .title').text(),
+            });
+        });
+    })
+    .catch(err => console.log(err));
     
     return true;
 }
@@ -1898,6 +2346,33 @@ const liveParsing = async () => {
     })
     .catch(err => console.log(err));
 
+    await axios.get('https://www.sports.ru/rfpl/') // rpl season info
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        rplSeasonInfo = $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > div.descr').text();
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://www.sports.ru/rfpl/') // rpl last winner
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        rplLastWinner = $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text();
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D0%B9%D1%81%D0%BA%D0%B0%D1%8F_%D0%BF%D1%80%D0%B5%D0%BC%D1%8C%D0%B5%D1%80-%D0%BB%D0%B8%D0%B3%D0%B0') // rpl most winner
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        rplMostWinner = $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-e2da8df976be4920 > tbody > tr:nth-child(12) > td > a').text();
+    })
+    .catch(err => console.log(err));
+
     return true;
 }
 
@@ -1907,7 +2382,6 @@ setInterval(() => {
     uefaCountryRank.splice(0, uefaCountryRank.length);
     uefaCountryRankSeason.splice(0, uefaCountryRankSeason.length);
     transferList.splice(0, transferList.length);
-    videoNews.splice(0, videoNews.length);
     rplStandings.splice(0, rplStandings.length);
     eplStandings.splice(0, eplStandings.length);
     laligaStandings.splice(0, laligaStandings.length);
@@ -1918,6 +2392,15 @@ setInterval(() => {
     forecasts.splice(0, forecasts.length);
     matchesSlider.splice(0, matchesSlider.length);
     matchesSliderCoefLinks.splice(0, matchesSliderCoefLinks.length);
+    matchesSliderCoefsW1.splice(0, matchesSliderCoefsW1.length);
+    matchesSliderCoefsD.splice(0, matchesSliderCoefsD.length);
+    matchesSliderCoefsW2.splice(0, matchesSliderCoefsW2.length);
+    matchesSliderLeagueNameRoundDate.splice(0, matchesSliderLeagueNameRoundDate.length);
+    matchesSliderStadiums.splice(0, matchesSliderStadiums.length);
+    matchesSliderVenue.splice(0, matchesSliderVenue.length);
+    matchesSliderReferee.splice(0, matchesSliderReferee.length);
+    matchesSliderWeatherIco.splice(0, matchesSliderWeatherIco.length);
+    matchesSliderWeatherDescr.splice(0, matchesSliderWeatherDescr.length);
     uclStandingsA.splice(0, uclStandingsA.length);
     uclStandingsB.splice(0, uclStandingsB.length);
     uclStandingsC.splice(0, uclStandingsC.length);
@@ -1948,7 +2431,6 @@ setInterval(() => {
     bundesligaTopScores.splice(0, bundesligaTopScores.length);
     serieaTopScores.splice(0, serieaTopScores.length);
     ligue1TopScores.splice(0, ligue1TopScores.length);
-    liveMatchesLinks.splice(0, liveMatchesLinks.length);
     uclTopScores.splice(0, uclTopScores.length);
     uelTopScores.splice(0, uelTopScores.length);
     ueclTopScores.splice(0, ueclTopScores.length);
@@ -1969,6 +2451,19 @@ setInterval(() => {
     unlStandingsD2.splice(0, unlStandingsD2.length);
     matchesSchedule.splice(0, matchesSchedule.length);
     fifaRanking.splice(0, fifaRanking.length);
+    euroQualStandingsA.splice(0, euroQualStandingsA.length);
+    euroQualStandingsB.splice(0, euroQualStandingsB.length);
+    euroQualStandingsC.splice(0, euroQualStandingsC.length);
+    euroQualStandingsD.splice(0, euroQualStandingsD.length);
+    euroQualStandingsE.splice(0, euroQualStandingsE.length);
+    euroQualStandingsF.splice(0, euroQualStandingsF.length);
+    euroQualStandingsG.splice(0, euroQualStandingsG.length);
+    euroQualStandingsH.splice(0, euroQualStandingsH.length);
+    euroQualStandingsI.splice(0, euroQualStandingsI.length);
+    euroQualStandingsJ.splice(0, euroQualStandingsJ.length);
+    rplSeasonInfo = '';
+    rplLastWinner = '';
+    rplMostWinner = '';
 
     parsing();
 }, 120000);
@@ -1976,6 +2471,8 @@ setInterval(() => {
 setInterval(() => {
     liveParsing();
     liveMatches.splice(0, liveMatches.length);
+    liveMatchesLinks.splice(0, liveMatchesLinks.length);
+    liveMatchesLeagueNameRoundDate.splice(0, liveMatchesLeagueNameRoundDate.length);
 }, 30000);
 
 app.listen(PORT, (err) => {
