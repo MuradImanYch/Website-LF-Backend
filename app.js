@@ -386,7 +386,7 @@ app.get('/rplResults', (req, res) => {
 app.get('/rplFixtures', (req, res) => {
     res.send(rplFixtures);
 });
-app.post('/searchTeam', async (req, res) => {
+app.post('/searchTeam', async (req, res) => { // searching favorite team
     await axios.get(`https://soccer365.ru/?a=search&q=${encodeURI(req.body.team)}`) // search team
     .then(response => response.data)
     .then(response => {
