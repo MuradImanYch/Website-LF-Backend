@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const PORT = process.env.PORT || 8080;
 const cheerio = require('cheerio');
@@ -7,44 +8,27 @@ const iconv = require('iconv-lite');
 const fetch = require('node-fetch');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const db = require('mysql');
+const passport = require('passport');
+const cookieParser = require('cookie-parser');
+
+const db = require('./db.js');
+const authRoutes = require('./routes/auth.js');
+const adminRoutes = require('./routes/admin.js');
+const newsRoutes = require('./routes/news.js');
+const matchesRoutes = require('./routes/matches.js');
+require('./controllers/parser.js');
 
 const app = express();
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(cors());
 app.use(express.json());
-
-const con = db.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'legfootball'
-});
-con.connect(err => {
-    if(err) throw err;
-    console.log('Connected to DB');
-});
-
-// admin
-app.post('/addNews', (req, res) => {
-    con.query('INSERT INTO news (category, title, img, content) VALUES(?, ?, ?, ?)', [req.body.category, req.body.title, req.body.img, req.body.content], (err => {
-        if(err) throw err;
-    }));
-});
-app.post('/delNews', (req, res) => {
-    con.query(`DELETE FROM news WHERE id = ${+req.body.id}`);
-});
-app.post('/findEditedNews', (req, res) => {
-    con.query(`SELECT * FROM news WHERE id = ${req.body.id}`, (err, result) => {
-        if(err) throw err;
-        res.send(result);
-    });
-});
-app.post('/editNews', (req, res) => {
-    con.query(`UPDATE news SET category = '${req.body.category}', title = '${req.body.title}', img = '${req.body.img}', content = '${req.body.content}' WHERE id = '${req.body.id}'`, (err, result) => {
-        if(err) throw err;
-    });
-});
+app.use(passport.initialize());
+require('./middleware/passport.js')(passport);
+app.use('/auth', authRoutes);
+app.use('/admin', adminRoutes);
+app.use('/news', newsRoutes);
+app.use('/matches', matchesRoutes);
+app.use(cookieParser());
 
 let uefaCountryRank = [],
     uefaCountryRankSeason = [],
@@ -55,20 +39,7 @@ let uefaCountryRank = [],
     bundesligaStandings = [],
     serieaStandings = [],
     ligue1Standings = [],
-    endedMatches = [],
     forecasts = [],
-    matchesSlider = [],
-    matchesSliderCoefLinks = [],
-    matchesSliderCoefsW1 = [],
-    matchesSliderCoefsD = [],
-    matchesSliderCoefsW2 = [],
-    teams = ["Челси", "Манчестер Сити", "Манчестер Юнайтед", "Ливерпуль", "Арсенал", "Тоттенхэм", "Барселона", "Атлетико Мадрид", "Реал Мадрид", "Севилья", "ПСЖ", "Марсель", "Лион", "Монако", "Ювентус", "Интер", "Милан", "Лацио", "Аталанта", "Наполи", "Рома", "Бавария", "Боруссия Дортмунд", "РБ Лейпциг", "Зенит", "ЦСКА Москва", "Спартак", "Краснодар", "Локомотив Москва", "Динамо Москва", "Шахтер", "Динамо Киев", "Заря", "Порту", "Бенфика", "Спортинг Лиссабон", "Брага", "ПСВ", "Аякс", "Фейеноорд", "Кайрат", "Астана", "Карабах Агдам", "Нефтчи", "Шериф", "Фенербахче", "Бешикташ", "Галатасарай", "БАТЭ", "Динамо Минск", "Пахтакор", "Насаф", "Динамо Тбилиси", "Динамо Батуми", "Пюник", "Алашкерт", "Рига", "РФШ", "Жальгирис", "Судува", "Флора", "Левадия", "Дордой", "Абдыш-Ата", "Истиклол Душанбе", "Худжанд", "Алтын Асыр", "Ахал", "Россия", "Испания", "Франция", "Аргентина", "Португалия", "Бразилия", "Германия", "Бельгия", "Англия", "Италия", "Мексика", "Уругвай", "США", "Хорватия", "Сенегал", "Япония", "Камерун", "Алжир", "Турция", "Нидерланды", "Украина", "Азербайджан", "Южная Корея", "Грузия", "Казахстан", "Беларусь", "Узбекистан", "Молдова", "Армения", "Кыргызстан", "Кыргызстан", "Литва", "Латвия", "Эстония", "Туркменистан", "Катар"],
-    matchesSliderLeagueNameRoundDate = [],
-    matchesSliderStadiums = [],
-    matchesSliderVenue = [],
-    matchesSliderReferee = [],
-    matchesSliderWeatherIco = [],
-    matchesSliderWeatherDescr = [],
     uclStandingsA = [],
     uclStandingsB = [],
     uclStandingsC = [],
@@ -93,9 +64,6 @@ let uefaCountryRank = [],
     ueclStandingsF = [],
     ueclStandingsG = [],
     ueclStandingsH = [],
-    liveMatches = [],
-    liveMatchesLinks = [],
-    liveMatchesLeagueNameRoundDate = [],
     rplTopScores = [],
     eplTopScores = [],
     laligaTopScores = [],
@@ -140,12 +108,23 @@ let uefaCountryRank = [],
     transferListLigue1 = [],
     rplSeasonInfo,
     rplLastWinner,
-    rplMostWinner
+    rplMostWinner,
+    rplResults = [],
+    rplFixtures = [],
+    favoriteTeams = ["Челси", "Манчестер Сити", "Манчестер Юнайтед", "Ливерпуль", "Арсенал", "Тоттенхэм", "Барселона", "Атлетико Мадрид", "Реал Мадрид", "Севилья", "ПСЖ", "Марсель", "Лион", "Монако", "Ювентус", "Интер", "Милан", "Лацио", "Аталанта", "Наполи", "Рома", "Бавария", "Боруссия Дортмунд", "РБ Лейпциг", "Зенит", "ЦСКА Москва", "Спартак", "Краснодар", "Локомотив Москва", "Динамо Москва", "Шахтер", "Динамо Киев", "Заря", "Порту", "Бенфика", "Спортинг Лиссабон", "Брага", "ПСВ", "Аякс", "Фейеноорд", "Кайрат", "Астана", "Карабах Агдам", "Нефтчи", "Шериф", "Фенербахче", "Бешикташ", "Галатасарай", "БАТЭ", "Динамо Минск", "Пахтакор", "Насаф", "Динамо Тбилиси", "Динамо Батуми", "Пюник", "Алашкерт", "Рига", "РФШ", "Жальгирис", "Судува", "Флора", "Левадия", "Дордой", "Абдыш-Ата", "Истиклол Душанбе", "Худжанд", "Алтын Асыр", "Ахал", "Россия", "Испания", "Франция", "Аргентина", "Португалия", "Бразилия", "Германия", "Бельгия", "Англия", "Италия", "Мексика", "Уругвай", "США", "Хорватия", "Сенегал", "Япония", "Камерун", "Алжир", "Турция", "Нидерланды", "Украина", "Азербайджан", "Южная Корея", "Грузия", "Казахстан", "Беларусь", "Узбекистан", "Молдова", "Армения", "Кыргызстан", "Кыргызстан", "Литва", "Латвия", "Эстония", "Туркменистан", "Катар"],
+    searchTeam = [],
+    matchesSlider = [],
+    matchesSliderCoefLinks = [],
+    matchesSliderCoefsW1 = [],
+    matchesSliderCoefsD = [],
+    matchesSliderCoefsW2 = [],
+    matchesSliderLeagueNameRoundDate = [],
+    matchesSliderStadiums = [],
+    matchesSliderVenue = [],
+    matchesSliderReferee = [],
+    matchesSliderWeatherIco = [],
+    matchesSliderWeatherDescr = []
     
-
-app.get('/liveMatches', (req, res) => {
-    res.send(liveMatches);
-});
 app.get('/uefaCountryRankSeason', (req, res) => {
     res.send(uefaCountryRankSeason);
 });
@@ -155,114 +134,7 @@ app.get('/uefaCountryRank', (req, res) => {
 app.get('/transferList', (req, res) => {
     res.send(transferList);
 });
-app.get('/allNews', (req, res) => {
-    con.query('SELECT * FROM news', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/mainNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category NOT IN ("blog", "video")', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/blogs', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "blog"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/videoNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "video"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/rplNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "rpl"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/eplNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "epl"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/laligaNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "laliga"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/serieaNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "seriea"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/bundesligaNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "bundesliga"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/ligue1News', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "ligue1"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/uclNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "ucl"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/uelNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "uel"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/ueclNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "uecl"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/wcNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "wc"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/ecNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "ec"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/unlNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "unl"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/transferNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "transfer"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
-app.get('/otherNews', (req, res) => {
-    con.query('SELECT * FROM news WHERE category = "other"', ((err, result) => {
-        if(err) throw err;
-        res.send(result);
-    }));
-});
+
 app.get('/rplStandings', (req, res) => {
     res.send(rplStandings);
 });
@@ -281,14 +153,8 @@ app.get('/serieaStandings', (req, res) => {
 app.get('/ligue1Standings', (req, res) => {
     res.send(ligue1Standings);
 });
-app.get('/endedMatches', (req, res) => {
-    res.send(endedMatches);
-});
 app.get('/forecasts', (req, res) => {
     res.send(forecasts);
-});
-app.get('/matchesSlider', (req, res) => {
-    res.send(matchesSlider);
 });
 app.get('/uclStandingsA', (req, res) => {
     res.send(uclStandingsA);
@@ -471,18 +337,18 @@ app.get('/euroQualStandingsJ', (req, res) => {
     res.send(euroQualStandingsJ);
 });
 app.post('/postPoll', (req, res) => {
-    con.query('INSERT INTO poll (clientIP, choise) VALUES(?, ?)', [req.body.clientIP, req.body.choiseVal], (err => {
+    db.query('INSERT INTO poll (clientIP, choise) VALUES(?, ?)', [req.body.clientIP, req.body.choiseVal], (err => {
         if(err) throw err;
     }));
 });
 app.get('/getPollYes', (req, res) => {
-    con.query(`SELECT * FROM poll WHERE choise="yes"`, (err, result) => {
+    db.query(`SELECT * FROM poll WHERE choise="yes"`, (err, result) => {
         if(err) throw err;
         res.send(result);
     });
 });
 app.get('/getPollNo', (req, res) => {
-    con.query(`SELECT * FROM poll WHERE choise="no"`, (err, result) => {
+    db.query(`SELECT * FROM poll WHERE choise="no"`, (err, result) => {
         if(err) throw err;
         res.send(result);
     });
@@ -514,9 +380,116 @@ app.get('/rplLastWinner', (req, res) => {
 app.get('/rplMostWinner', (req, res) => {
     res.send(rplMostWinner);
 });
+app.get('/rplResults', (req, res) => {
+    res.send(rplResults);
+});
+app.get('/rplFixtures', (req, res) => {
+    res.send(rplFixtures);
+});
+app.post('/searchTeam', async (req, res) => {
+    await axios.get(`https://soccer365.ru/?a=search&q=${encodeURI(req.body.team)}`) // search team
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('.search_column .search_result').each((i, element) => {
+            $(element).find('span a').parent().parent().parent().find('.block_header').text() === 'Клубы' ? searchTeam.push({
+                name: $(element).find('span a').text(),
+                img: $(element).find('span').attr('style').split('\'')
+            }) : false;
+        });
+    })
+    .catch(err => console.log(err));
+
+    res.send(searchTeam);
+    searchTeam.splice(0, searchTeam.length);
+});
+app.post('/favoriteTeams', (req, res) => {
+    favoriteTeams.push(req.body);
+});
+app.get('/matchesSlider', (req, res) => {
+    res.send(matchesSlider);
+});
+
 
 const parsing = async () => {
     const cyrillicToTranslit = new CyrillicToTranslit();
+
+    await axios.get('https://soccer365.ru/online/') // matchesSlider
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+            favoriteTeams && favoriteTeams.map((e) => {
+                $('.game_block').each((i, element) => {
+                    $(element).find('a').parent().attr('dt-status') === 'u' && ($(element).find('a .result .ht .name .img16 span').text() === e || $(element).find('a .result .at .name .img16 span').text() === e) && matchesSlider.push({
+                        hName: $(element).find('.game_block a .result .ht .name .img16 span').text(),
+                        aName: $(element).find('.game_block a .result .at .name .img16 span').text(),
+                        hLogo: $(element).find('.game_block a .result .ht .name .img16 img').attr('src'),
+                        aLogo: $(element).find('.game_block a .result .at .name .img16 img').attr('src'),
+                        lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src') || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 img').attr('src')
+                    }) && matchesSliderCoefLinks.push(`https://soccer365.ru${$(element).find('a').attr('href')}`); // push coef links
+                });
+            });
+    })
+    .catch(err => console.log(err));
+
+    for (e of matchesSliderCoefLinks) {
+        await axios.get(`${e}`) // matchesSlider | scraping nested link
+            .then(response => response.data)
+            .then(response => {
+                const $ = cheerio.load(response);
+                
+                $('.adv_kef_wgt_odd td').eq(1).each((i, element) => { // scraping coefs
+                    matchesSliderCoefsW1.push($(element).find('a .koeff').text()); 
+                    matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                        w1: matchesSliderCoefsW1[index]
+                    }));
+                });
+                $('.adv_kef_wgt_odd td').eq(2).each((i, element) => {
+                    matchesSliderCoefsD.push($(element).find('a .koeff').text()); 
+                    matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                        d: matchesSliderCoefsD[index]
+                    }));
+                });
+                $('.adv_kef_wgt_odd td').eq(3).each((i, element) => {
+                    matchesSliderCoefsW2.push($(element).find('a .koeff').text()); 
+                    matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                        w2: matchesSliderCoefsW2[index]
+                    }));
+                });
+
+                matchesSliderLeagueNameRoundDate.push($('#game_events h2').text().split(",")); // scraping round
+                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                    lNameRoundDateTime: matchesSliderLeagueNameRoundDate[index]
+                }));
+
+                matchesSliderStadiums.push($('#preview > div.block_body > div.preview_item.st > div > span >').text()); // scraping stadiums
+                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                    stadium: matchesSliderStadiums[index]
+                }));
+
+                matchesSliderVenue.push($('#preview > div.block_body > div.preview_item.st > span:nth-child(3)').text()); // scraping venue
+                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                    venue: matchesSliderVenue[index]
+                }));
+
+                matchesSliderReferee.push($('#preview > div.block_body > div:nth-child(2)').text().replace(/\s/g, ' ')); // scraping refree
+                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                    refree: matchesSliderReferee[index]
+                }));
+
+                matchesSliderWeatherIco.push($('#preview > div.block_body > div.preview_item.st > div.img16.weath_tmp > img').attr('src')); // scraping weather ico
+                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                    weatherIco: matchesSliderWeatherIco[index]
+                }));
+
+                matchesSliderWeatherDescr.push($('#preview > div.block_body > div.preview_item.st > div.img16.weath_tmp > span').text() + ' | ' + $('#preview > div.block_body > div.preview_item.st > span:nth-child(5)').text()); // scraping weather ico
+                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
+                    weatherDescr: matchesSliderWeatherDescr[index]
+                }));
+            })
+            .catch(err => console.log(err));
+    }
 
     await axios.get('https://terrikon.com/football/uefa_coefs') // last 5 uefa season || uefa rank
     .then(response => response.data)
@@ -834,51 +807,6 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://soccer365.ru/online/') // ended matches
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('.game_block').each((i, element) => {
-            $(element).find('a .status span').text() == 'Завершен' && endedMatches.push({
-                hName: $(element).find('a .result .ht .name .img16 span').text() === '' ? $(element).find('a .result .ht .name').text() : $(element).find('a .result .ht .name .img16 span').text(),
-                aName: $(element).find('a .result .at .name .img16 span').text() === '' ? $(element).find('a .result .at .name').text() : $(element).find('a .result .at .name .img16 span').text(),
-                hLogo: $(element).find('a .result .ht .name .img16 img').attr('src'),
-                aLogo: $(element).find('a .result .at .name .img16 img').attr('src'),
-                lLogo: $(element).find('a').parent().parent().find('div:first-child a .img16 img').attr('src') === undefined ? $(element).find('a').parent().parent().find('div:first-child .img16 img').attr('src') : $(element).find('a').parent().parent().find('div:first-child a .img16 img').attr('src'),
-                lName: $(element).find('a').parent().parent().find('div:first-child a .img16 span').text() === '' ? $(element).find('a').parent().parent().find('div:first-child .img16 span').text() : $(element).find('a').parent().parent().find('div:first-child a .img16 span').text(),
-                lRound: $(element).find('a .stage').text(),
-                hScore: $(element).find('a .result .ht .gls').text(),
-                hCards: $(element).find('a .result .ht .cards span').eq(0).attr('class') && $(element).find('a .result .ht .cards span').eq(0).attr('class').split(' ')[1].split('_')[1],
-                aCards: $(element).find('a .result .at .cards span').eq(0).attr('class') && $(element).find('a .result .at .cards span').eq(0).attr('class').split(' ')[1].split('_')[1],
-                hCardPlayer: $(element).find('a .result .ht .cards span').eq(0).attr('title') && $(element).find('a .result .ht .cards span').eq(0).attr('title'),
-                aCardPlayer: $(element).find('a .result .at .cards span').eq(0).attr('title') && $(element).find('a .result .at .cards span').eq(0).attr('title'),
-                hCards2: $(element).find('a .result .ht .cards span').eq(1).attr('class') && $(element).find('a .result .ht .cards span').eq(1).attr('class').split(' ')[1].split('_')[1],
-                aCards2: $(element).find('a .result .at .cards span').eq(1).attr('class') && $(element).find('a .result .at .cards span').eq(1).attr('class').split(' ')[1].split('_')[1],
-                hCardPlayer2: $(element).find('a .result .ht .cards span').eq(1).attr('title') && $(element).find('a .result .ht .cards span').eq(1).attr('title'),
-                aCardPlayer2: $(element).find('a .result .at .cards span').eq(1).attr('title') && $(element).find('a .result .at .cards span').eq(1).attr('title'),
-                hCards3: $(element).find('a .result .ht .cards span').eq(2).attr('class') && $(element).find('a .result .ht .cards span').eq(2).attr('class').split(' ')[1].split('_')[1],
-                aCards3: $(element).find('a .result .at .cards span').eq(2).attr('class') && $(element).find('a .result .at .cards span').eq(2).attr('class').split(' ')[1].split('_')[1],
-                hCardPlayer3: $(element).find('a .result .ht .cards span').eq(2).attr('title') && $(element).find('a .result .ht .cards span').eq(2).attr('title'),
-                aCardPlayer3: $(element).find('a .result .at .cards span').eq(2).attr('title') && $(element).find('a .result .at .cards span').eq(2).attr('title'),
-                hCards4: $(element).find('a .result .ht .cards span').eq(3).attr('class') && $(element).find('a .result .ht .cards span').eq(3).attr('class').split(' ')[1].split('_')[1],
-                aCards4: $(element).find('a .result .at .cards span').eq(3).attr('class') && $(element).find('a .result .at .cards span').eq(3).attr('class').split(' ')[1].split('_')[1],
-                hCardPlayer4: $(element).find('a .result .ht .cards span').eq(3).attr('title') && $(element).find('a .result .ht .cards span').eq(3).attr('title'),
-                aCardPlayer4: $(element).find('a .result .at .cards span').eq(3).attr('title') && $(element).find('a .result .at .cards span').eq(3).attr('title'),
-                hCards5: $(element).find('a .result .ht .cards span').eq(4).attr('class') && $(element).find('a .result .ht .cards span').eq(4).attr('class').split(' ')[1].split('_')[1],
-                aCards5: $(element).find('a .result .at .cards span').eq(4).attr('class') && $(element).find('a .result .at .cards span').eq(4).attr('class').split(' ')[1].split('_')[1],
-                hCardPlayer5: $(element).find('a .result .ht .cards span').eq(4).attr('title') && $(element).find('a .result .ht .cards span').eq(4).attr('title'),
-                aCardPlayer5: $(element).find('a .result .at .cards span').eq(4).attr('title') && $(element).find('a .result .at .cards span').eq(4).attr('title'),
-                hCards6: $(element).find('a .result .ht .cards span').eq(5).attr('class') && $(element).find('a .result .ht .cards span').eq(5).attr('class').split(' ')[1].split('_')[1],
-                aCards6: $(element).find('a .result .at .cards span').eq(5).attr('class') && $(element).find('a .result .at .cards span').eq(5).attr('class').split(' ')[1].split('_')[1],
-                hCardPlayer6: $(element).find('a .result .ht .cards span').eq(5).attr('title') && $(element).find('a .result .ht .cards span').eq(5).attr('title'),
-                aCardPlayer6: $(element).find('a .result .at .cards span').eq(5).attr('title') && $(element).find('a .result .at .cards span').eq(5).attr('title'),
-                aScore: $(element).find('a .result .at .gls').text()
-            });
-        });
-    })
-    .catch(err => console.log(err));
-
     await axios.get('https://legalbet.ru/match-center/') // forecasts
     .then(response => response.data)
     .then(response => {
@@ -908,84 +836,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://soccer365.ru/online/') // matchesSlider
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-            teams && teams.map((e) => {
-                $('.game_block').each((i, element) => {
-                    $(element).find('a').parent().attr('dt-status') === 'u' && ($(element).find('a .result .ht .name .img16 span').text() === e || $(element).find('a .result .at .name .img16 span').text() === e) && matchesSlider.push({
-                        hName: $(element).find('.game_block a .result .ht .name .img16 span').text(),
-                        aName: $(element).find('.game_block a .result .at .name .img16 span').text(),
-                        hLogo: $(element).find('.game_block a .result .ht .name .img16 img').attr('src'),
-                        aLogo: $(element).find('.game_block a .result .at .name .img16 img').attr('src'),
-                        lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src') || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 img').attr('src')
-                    }) && matchesSliderCoefLinks.push(`https://soccer365.ru${$(element).find('a').attr('href')}`); // push coef links
-                });
-            });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of matchesSliderCoefLinks) {
-        await axios.get(`${e}`) // matchesSlider | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-                
-                $('.adv_kef_wgt_odd td').eq(1).each((i, element) => { // scraping coefs
-                    matchesSliderCoefsW1.push($(element).find('a .koeff').text()); 
-                    matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                        w1: matchesSliderCoefsW1[index]
-                    }));
-                });
-                $('.adv_kef_wgt_odd td').eq(2).each((i, element) => {
-                    matchesSliderCoefsD.push($(element).find('a .koeff').text()); 
-                    matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                        d: matchesSliderCoefsD[index]
-                    }));
-                });
-                $('.adv_kef_wgt_odd td').eq(3).each((i, element) => {
-                    matchesSliderCoefsW2.push($(element).find('a .koeff').text()); 
-                    matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                        w2: matchesSliderCoefsW2[index]
-                    }));
-                });
-
-                matchesSliderLeagueNameRoundDate.push($('#game_events h2').text().split(",")); // scraping round
-                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                    lNameRoundDateTime: matchesSliderLeagueNameRoundDate[index]
-                }));
-
-                matchesSliderStadiums.push($('#preview > div.block_body > div.preview_item.st > div > span >').text()); // scraping stadiums
-                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                    stadium: matchesSliderStadiums[index]
-                }));
-
-                matchesSliderVenue.push($('#preview > div.block_body > div.preview_item.st > span:nth-child(3)').text()); // scraping venue
-                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                    venue: matchesSliderVenue[index]
-                }));
-
-                matchesSliderReferee.push($('#preview > div.block_body > div:nth-child(2)').text().replace(/\s/g, ' ')); // scraping refree
-                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                    refree: matchesSliderReferee[index]
-                }));
-
-                matchesSliderWeatherIco.push($('#preview > div.block_body > div.preview_item.st > div.img16.weath_tmp > img').attr('src')); // scraping weather ico
-                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                    weatherIco: matchesSliderWeatherIco[index]
-                }));
-
-                matchesSliderWeatherDescr.push($('#preview > div.block_body > div.preview_item.st > div.img16.weath_tmp > span').text() + ' | ' + $('#preview > div.block_body > div.preview_item.st > span:nth-child(5)').text()); // scraping weather ico
-                matchesSlider = matchesSlider.map((item, index) => ({ ...item,
-                    weatherDescr: matchesSliderWeatherDescr[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
-
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (A)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (A)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1007,7 +858,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (B)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (B)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1029,7 +880,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (C)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (C)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1051,7 +902,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (D)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (D)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1073,7 +924,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (E)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (E)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1095,7 +946,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (F)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (F)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1117,7 +968,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (G)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (G)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1139,7 +990,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (H)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (H)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1161,7 +1012,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (A)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (A)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1183,7 +1034,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (B)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (B)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1205,7 +1056,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (C)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (C)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1227,7 +1078,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (D)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (D)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1249,7 +1100,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (E)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (E)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1271,7 +1122,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (F)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (F)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1293,7 +1144,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (G)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (G)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1315,7 +1166,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-League/standings') // uel standings (H)
+    await axios.get('https://www.liveresult.ru/football/Europa-League/standings' && 'https://www.liveresult.ru/football/Europa-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-League/standings?st=1') // uel standings (H)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1337,7 +1188,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (A)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (A)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1359,7 +1210,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (B)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (B)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1381,7 +1232,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (C)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (C)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1403,7 +1254,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (D)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (D)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1425,7 +1276,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (E)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (E)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1447,7 +1298,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (F)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (F)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1469,7 +1320,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (G)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (G)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -1491,7 +1342,7 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings') // uecl standings (H)
+    await axios.get('https://www.liveresult.ru/football/Europa-Conference-League/standings' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=0' && 'https://www.liveresult.ru/football/Europa-Conference-League/standings?st=1') // uecl standings (H)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
@@ -2285,47 +2136,6 @@ const parsing = async () => {
         });
     })
     .catch(err => console.log(err));
-    
-    return true;
-}
-
-parsing();
-
-const liveParsing = async () => {
-    await axios.get('https://soccer365.ru/online/') // liveMatches
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('.game_block').each((i, element) => {
-            $(element).find('a').parent().attr('dt-status') === 'i' && liveMatches.push({
-                hName: $(element).find('.game_block a .result .ht .name .img16 span').text() === '' ? $(element).find('.game_block a .result .ht .name').text() : $(element).find('.game_block a .result .ht .name .img16 span').text(),
-                aName: $(element).find('.game_block a .result .at .name .img16 span').text() === '' ? $(element).find('.game_block a .result .at .name').text() : $(element).find('.game_block a .result .at .name .img16 span').text(),
-                hLogo: $(element).find('.game_block a .result .ht .name .img16 img').attr('src'),
-                aLogo: $(element).find('.game_block a .result .at .name .img16 img').attr('src'),
-                lLogo: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 img').attr('src') || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 img').attr('src'),
-                lName: $(element).find('.game_block a').parent().parent().find('div:first-child a .img16 span').text() || $(element).find('.game_block a').parent().parent().find('div:first-child .img16 span').text(),
-                time: $(element).find('.game_block a .status').text(),
-                hScore: $(element).find('.game_block a .result .ht .gls').text(),
-                aScore: $(element).find('.game_block a .result .at .gls').text()
-            }) && liveMatchesLinks.push(`https://soccer365.ru${$(element).find('.game_block a').attr('href')}`); // push live matches links
-        });
-    })
-    .catch(err => console.log(err));
-
-    for await (e of liveMatchesLinks) {
-        await axios.get(`${e}`) // liveMatches | scraping nested link
-            .then(response => response.data)
-            .then(response => {
-                const $ = cheerio.load(response);
-
-                liveMatchesLeagueNameRoundDate.push($('#game_events h2').text().split(",")); // scraping round
-                liveMatches = liveMatches.map((item, index) => ({ ...item,
-                    lNameRoundDateTime: liveMatchesLeagueNameRoundDate[index]
-                }));
-            })
-            .catch(err => console.log(err));
-    }
 
     await axios.get('https://soccer365.ru/ranking/fifa/') // fifa ranking
     .then(response => response.data)
@@ -2373,10 +2183,50 @@ const liveParsing = async () => {
     })
     .catch(err => console.log(err));
 
+    await axios.get('https://soccer365.ru/competitions/13/results/') // rpl results
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('.game_block').each((i, element) => {
+            rplResults.push({
+                round: $(element).parent().parent().find('.cmp_stg_ttl').text(),
+                hName: $(element).find('a .result .ht .name .img16 span').text(),
+                aName: $(element).find('a .result .at .name .img16 span').text(),
+                hLogo: $(element).find('a .result .ht .name .img16 img').attr('src'),
+                aLogo: $(element).find('a .result .at .name .img16 img').attr('src'),
+                hScore: $(element).find('a .result .ht .gls').text(),
+                aScore: $(element).find('a .result .at .gls').text(),
+                dateTime: $(element).find('a .status .size10').text()
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    await axios.get('https://soccer365.ru/competitions/13/shedule/') // rpl fixtures
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('.game_block').each((i, element) => {
+            rplFixtures.push({
+                round: $(element).parent().parent().find('.cmp_stg_ttl').text(),
+                hName: $(element).find('a .result .ht .name .img16 span').text(),
+                aName: $(element).find('a .result .at .name .img16 span').text(),
+                hLogo: $(element).find('a .result .ht .name .img16 img').attr('src'),
+                aLogo: $(element).find('a .result .at .name .img16 img').attr('src'),
+                hScore: $(element).find('a .result .ht .gls').text(),
+                aScore: $(element).find('a .result .at .gls').text(),
+                dateTime: $(element).find('a .status .size10').text()
+            });
+        });
+    })
+    .catch(err => console.log(err));
+    
     return true;
 }
 
-liveParsing();
+parsing();
 
 setInterval(() => {
     uefaCountryRank.splice(0, uefaCountryRank.length);
@@ -2388,7 +2238,6 @@ setInterval(() => {
     bundesligaStandings.splice(0, bundesligaStandings.length);
     serieaStandings.splice(0, serieaStandings.length);
     ligue1Standings.splice(0, ligue1Standings.length);
-    endedMatches.splice(0, endedMatches.length);
     forecasts.splice(0, forecasts.length);
     matchesSlider.splice(0, matchesSlider.length);
     matchesSliderCoefLinks.splice(0, matchesSliderCoefLinks.length);
@@ -2464,16 +2313,11 @@ setInterval(() => {
     rplSeasonInfo = '';
     rplLastWinner = '';
     rplMostWinner = '';
+    rplResults.splice(0, rplResults.length);
+    rplFixtures.splice(0, rplFixtures.length);
 
     parsing();
 }, 120000);
-
-setInterval(() => {
-    liveParsing();
-    liveMatches.splice(0, liveMatches.length);
-    liveMatchesLinks.splice(0, liveMatchesLinks.length);
-    liveMatchesLeagueNameRoundDate.splice(0, liveMatchesLeagueNameRoundDate.length);
-}, 30000);
 
 app.listen(PORT, (err) => {
     if(err) return err;
