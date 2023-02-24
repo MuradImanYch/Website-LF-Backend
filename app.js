@@ -337,18 +337,18 @@ app.get('/euroQualStandingsJ', (req, res) => {
     res.send(euroQualStandingsJ);
 });
 app.post('/postPoll', (req, res) => {
-    db.query('INSERT INTO poll (clientIP, choise) VALUES(?, ?)', [req.body.clientIP, req.body.choiseVal], (err => {
+    db.query('INSERT INTO poll (clientIP, choice) VALUES(?, ?)', [req.body.clientIP, req.body.choiceVal], (err => {
         if(err) throw err;
     }));
 });
 app.get('/getPollYes', (req, res) => {
-    db.query(`SELECT * FROM poll WHERE choise="yes"`, (err, result) => {
+    db.query(`SELECT * FROM poll WHERE choice="yes"`, (err, result) => {
         if(err) throw err;
         res.send(result);
     });
 });
 app.get('/getPollNo', (req, res) => {
-    db.query(`SELECT * FROM poll WHERE choise="no"`, (err, result) => {
+    db.query(`SELECT * FROM poll WHERE choice="no"`, (err, result) => {
         if(err) throw err;
         res.send(result);
     });
