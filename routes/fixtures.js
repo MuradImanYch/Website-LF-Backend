@@ -1,0 +1,7 @@
+const express = require('express');
+const router = express.Router();
+const controller = require('../controllers/fixtures.js');
+
+router.get('/rpl', controller.rpl);
+
+module.exports = router;

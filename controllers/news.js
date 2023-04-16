@@ -113,7 +113,7 @@ module.exports.unlNews = (req, res) => {
 }
 
 module.exports.transferNews = (req, res) => {
-    db.query('SELECT * FROM news WHERE category = "unl"', ((err, result) => {
+    db.query('SELECT * FROM news WHERE category = "transfer"', ((err, result) => {
         if(err) throw err;
         res.send(result);
     }));

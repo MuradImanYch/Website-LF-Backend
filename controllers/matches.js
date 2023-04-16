@@ -13,3 +13,17 @@ module.exports.ended = (req, res) => {
         res.send(result);
     }));
 }
+
+module.exports.matchesslider = (req, res) => {
+    db.query('SELECT * FROM matchesslider', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+}
+
+/* module.exports.favLive = (req, res) => {
+    db.query('SELECT * FROM favmatcheslive', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+} */

@@ -7,10 +7,10 @@ module.exports.login = (req, res) => {
     db.query(`SELECT * FROM users WHERE username="${req.body.username}"`, (err, result) => {
         if(err) throw err;
 
-        bcrypt.compare(req.body.password, result[0]?.password, (err, res) => {
+        bcrypt.compare(req.body.password, result[0]?.password, (err, response) => {
             // if(err) throw err;
 
-            res ? console.log('Вход разрешен') : console.log('Неверный логин или пароль');
+            response ? res.send({message: 'Вход разрешен', auth: true, token: result[0].token}) : res.send({message: 'Неверный логин или пароль', auth: false});
         });
     });
 }
@@ -21,7 +21,8 @@ module.exports.registration = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const token = jwt.sign({
-        username: req.body.username
+        username: req.body.username,
+        password: passwordHash
     }, 'secretkey', {
         expiresIn: '30d'
     });
@@ -29,12 +30,13 @@ module.exports.registration = async (req, res) => {
     db.query(`SELECT * FROM users WHERE username="${req.body.username}"`, (err, result) => {
         if(err) throw err;
 
-        result.length > 0 ? console.log('Пользователь с таким ником уже существует') : db.query('INSERT INTO users (username, password) VALUES(?, ?)', [req.body.username, passwordHash], (err => {
+        result.length > 0 ? res.send({message: 'Пользователь с таким ником уже существует', auth: false}) : db.query('INSERT INTO users (username, password, token) VALUES(?, ?, ?)', [req.body.username, passwordHash, token], (err => {
             if(err) throw err;
             res.send({
-                token: `Bearer ${token}`
+                token: `${token}`,
+                message: 'Пользователь создан',
+                auth: true
             });
-            console.log('Пользователь создан');
         }));
     });
 }
