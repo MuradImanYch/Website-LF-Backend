@@ -15,6 +15,7 @@ router.get('/ligue1News', controller.ligue1News);
 router.get('/uclNews', controller.uclNews);
 router.get('/uelNews', controller.uelNews);
 router.get('/ueclNews', controller.ueclNews);
+router.get('/euQualNews', controller.euQualNews);
 router.get('/wcNews', controller.wcNews);
 router.get('/ecNews', controller.ecNews);
 router.get('/unlNews', controller.unlNews);

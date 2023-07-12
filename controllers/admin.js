@@ -10,7 +10,7 @@ module.exports.check = (req, res) => {
 }
 
 module.exports.addNews = (req, res) => {
-    db.query('INSERT INTO news (category, title, img, content) VALUES(?, ?, ?, ?)', [req.body.category, req.body.title, req.body.img, req.body.content], (err => {
+    db.query('INSERT INTO news (category, title, img, content, meta_description, meta_keywords) VALUES(?, ?, ?, ?, ?, ?)', [req.body.category, req.body.title, req.body.img, req.body.content, req.body.metaDescr, req.body.metaKeywords], (err => {
         if(err) throw err;
     }));
 }
@@ -38,7 +38,7 @@ module.exports.findEditedNews = (req, res) => {
 }
 
 module.exports.editNews = (req, res) => {
-    db.query(`UPDATE news SET category = '${req.body.category}', title = '${req.body.title}', img = '${req.body.img}', content = '${req.body.content}' WHERE id = '${req.body.id}'`, (err, result) => {
+    db.query(`UPDATE news SET category = '${req.body.category}', title = '${req.body.title}', img = '${req.body.img}', content = '${req.body.content}', meta_description = '${req.body.metaDescr}', meta_keywords = '${req.body.metaKeywords}' WHERE id = '${req.body.id}'`, (err, result) => {
         if(err) throw err;
     });
 }

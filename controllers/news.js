@@ -91,6 +91,13 @@ module.exports.ueclNews = (req, res) => {
     }));
 }
 
+module.exports.euQualNews = (req, res) => {
+    db.query('SELECT * FROM news WHERE category = "eu-qualification"', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+}
+
 module.exports.wcNews = (req, res) => {
     db.query('SELECT * FROM news WHERE category = "wc"', ((err, result) => {
         if(err) throw err;

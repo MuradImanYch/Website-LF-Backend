@@ -14,16 +14,16 @@ module.exports.ended = (req, res) => {
     }));
 }
 
-module.exports.matchesslider = (req, res) => {
-    db.query('SELECT * FROM matchesslider', ((err, result) => {
+module.exports.expectedPost = (req, res) => {
+    db.query(`SELECT favMatchesExpected FROM users WHERE token="${req.body.token}"`, ((err, result) => {
         if(err) throw err;
-        res.send(result);
+        // res.send(result[0].favMatchesExpected);
     }));
 }
 
-/* module.exports.favLive = (req, res) => {
-    db.query('SELECT * FROM favmatcheslive', ((err, result) => {
+module.exports.favLive = (req, res) => {
+    db.query(`SELECT favMatchesLive FROM users WHERE token="${req.body.token}"`, ((err, result) => {
         if(err) throw err;
-        res.send(result);
+        // res.send(JSON.parse(result[0].favMatchesLive));
     }));
-} */
+}

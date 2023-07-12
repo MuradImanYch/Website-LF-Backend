@@ -24,6 +24,8 @@ const broadcastsRoutes = require('./routes/broadcasts.js');
 const fixturesRoutes = require('./routes/fixtures.js');
 const resultsRoutes = require('./routes/results.js');
 const leagueSeasonInfoRoutes = require('./routes/leagueSeasonInfo.js');
+const likeRoutes = require('./routes/like.js');
+const viewsRoutes = require('./routes/views.js');
 require('./controllers/parser.js');
 const app = express();
 
@@ -44,6 +46,8 @@ app.use('/broadcasts', broadcastsRoutes);
 app.use('/fixtures', fixturesRoutes);
 app.use('/results', resultsRoutes);
 app.use('/leagueinfo', leagueSeasonInfoRoutes);
+app.use('/like', likeRoutes);
+app.use('/views', viewsRoutes);
 app.use(cookieParser());
 const storage = multer.diskStorage({ // multer handler
     destination: (req, file, cb) => {
