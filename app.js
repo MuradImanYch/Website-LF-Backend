@@ -49,6 +49,7 @@ app.use('/leagueinfo', leagueSeasonInfoRoutes);
 app.use('/like', likeRoutes);
 app.use('/views', viewsRoutes);
 app.use(cookieParser());
+
 const storage = multer.diskStorage({ // multer handler
     destination: (req, file, cb) => {
         cb(null, './public/static/uploads');
