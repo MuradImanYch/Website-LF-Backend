@@ -391,7 +391,7 @@ module.exports.ueclTS = (req, res) => {
     });
 }
 module.exports.unlTS = (req, res) => {
-    db.query('SELECT * FROM unlts', (err, result) => {
+    db.query('SELECT * FROM unlTS', (err, result) => {
         if(err) throw err;
         res.send(result);
     });

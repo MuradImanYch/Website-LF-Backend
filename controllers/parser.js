@@ -4,6 +4,8 @@ const cheerio = require('cheerio');
 const CyrillicToTranslit = require('cyrillic-to-translit-js');
 const iconv = require('iconv-lite');
 
+let date = new Date();
+
 let liveMatches = [],
     liveMatchesLinks = [],
     liveMatchesLeagueNameRoundDate = [],
@@ -117,7 +119,8 @@ let liveMatches = [],
     euQualResults = [],
     unlInfo = [],
     unlFixtures = [],
-    unlResults = []
+    unlResults = [],
+    expectedMatches = []
 
 const liveParsing = async () => {
     await axios.get('https://soccer365.ru/online/') // liveMatches
@@ -159,8 +162,41 @@ const liveParsing = async () => {
         if(err) throw err;
     }));
 
-    liveMatches.map((e) => {
-        db.query('INSERT INTO livematches (hName, aName, hScore, aScore, hLogo, aLogo, lLogo, lName, time, round, roundInfo) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [e.hName, e.aName, e.hScore, e.aScore, e.hLogo, e.aLogo, e.lLogo, e.lNameRoundDateTime[0]?.indexOf('Товарищеский') !== -1 ? 'Товарищеский' : e.lNameRoundDateTime[0], e.time, e.lNameRoundDateTime[1], e.lNameRoundDateTime[2]], (err => {
+    if(liveMatches.length > 0) {
+        liveMatches?.map((e) => {
+            db.query('INSERT INTO livematches (hName, aName, hScore, aScore, hLogo, aLogo, lLogo, lName, time, round, roundInfo) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [e.hName, e.aName, e.hScore, e.aScore, e.hLogo, e.aLogo, e.lLogo, e.lNameRoundDateTime[0]?.indexOf('Товарищеский') !== -1 ? 'Товарищеский' : e.lNameRoundDateTime[0], e.time, e.lNameRoundDateTime[1], e.lNameRoundDateTime[2]], (err => {
+                if(err) throw err;
+            }));
+        });
+    }
+
+    await axios.get('https://soccer365.ru/') // expected matches
+    .then(response => response.data)
+    .then(response => {
+        const $ = cheerio.load(response);
+
+        $('.block_body_nopadding .game_block').each((i, element) => {
+            expectedMatches.push({
+                hName: $(element).find('a .result .ht .name .img16 span').text() === '' ? $(element).find('a .result .ht .name').text() : $(element).find('a .result .ht .name .img16 span').text(),
+                aName: $(element).find('a .result .at .name .img16 span').text() === '' ? $(element).find('a .result .at .name').text() : $(element).find('a .result .at .name .img16 span').text(),
+                hLogo: $(element).find('a .result .ht .name .img16 img').attr('src'),
+                aLogo: $(element).find('a .result .at .name .img16 img').attr('src'),
+                lLogo: $(element).find('a .cmp .img16 img').attr('src'),
+                lName: $(element).find('a .cmp .img16').text(),
+                hScore: $(element).find('a .result .ht .gls').text(),
+                aScore: $(element).find('a .result .at .gls').text(),
+                dateTime: $(element).find('a .status').text()
+            });
+        });
+    })
+    .catch(err => console.log(err));
+
+    db.query('DELETE FROM expectedmatches', (err => {
+        if(err) throw err;
+    }));
+
+    expectedMatches.map((e) => {
+        db.query('INSERT INTO expectedmatches (hName, aName, hLogo, aLogo, lLogo, lName, hScore, aScore, dateTime) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)', [e.hName, e.aName, e.hLogo, e.aLogo, e.lLogo, e.lName.indexOf('Товарищеский') !== -1 ? 'Товарищеский' : e.lName, e.hScore, e.aScore, e.dateTime], (err => {
             if(err) throw err;
         }));
     });
@@ -266,15 +302,15 @@ const parsing = async () => {
 
             $('tbody tr').each((i, element) => {
                 transferList.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -291,22 +327,22 @@ const parsing = async () => {
         })
         .catch(err => console.log(err));
 
-        await axios.get(`https://soccer365.ru/transfers/&cn_id=1&prd=2022-1&p=${i}`) // popular transfer list rpl
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=1&prd=${date.getFullYear()}-1&p=${i}`) // popular transfer list rpl
         .then(response => response.data)
         .then(response => {
             const $ = cheerio.load(response);
 
             $('tbody tr').each((i, element) => {
                 transferListRpl.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -323,22 +359,22 @@ const parsing = async () => {
             }));
         });
 
-        await axios.get(`https://soccer365.ru/transfers/&cn_id=3&prd=2022-1&p=${i}`) // popular transfer list epl
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=3&prd=${date.getFullYear()}-1&p=${i}`) // popular transfer list epl
         .then(response => response.data)
         .then(response => {
             const $ = cheerio.load(response);
 
             $('tbody tr').each((i, element) => {
                 transferListEpl.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -355,22 +391,22 @@ const parsing = async () => {
             }));
         });
 
-        await axios.get(`https://soccer365.ru/transfers/&cn_id=4&prd=2022-1&p=${i}`) // popular transfer list laliga
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=4&prd=${date.getFullYear()}-1&p=${i}`) // popular transfer list laliga
         .then(response => response.data)
         .then(response => {
             const $ = cheerio.load(response);
 
             $('tbody tr').each((i, element) => {
                 transferListLaliga.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -387,22 +423,22 @@ const parsing = async () => {
             }));
         });
 
-        await axios.get(`https://soccer365.ru/transfers/&cn_id=2&prd=2022-1&p=${i}`) // popular transfer list serie a
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=2&prd=${date.getFullYear()}-1&p=${i}`) // popular transfer list serie a
         .then(response => response.data)
         .then(response => {
             const $ = cheerio.load(response);
 
             $('tbody tr').each((i, element) => {
                 transferListSeriea.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -419,22 +455,22 @@ const parsing = async () => {
             }));
         });
 
-        await axios.get(`https://soccer365.ru/transfers/&cn_id=6&prd=2022-1&p=${i}`) // popular transfer list bundesliga
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=6&prd=${date.getFullYear()}-1&p=${i}`) // popular transfer list bundesliga
         .then(response => response.data)
         .then(response => {
             const $ = cheerio.load(response);
 
             $('tbody tr').each((i, element) => {
                 transferListBundesliga.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -451,22 +487,22 @@ const parsing = async () => {
             }));
         });
 
-        await axios.get(`https://soccer365.ru/transfers/&cn_id=7&prd=2022-1&p=${i}`) // popular transfer list ligue 1
+        await axios.get(`https://soccer365.ru/transfers/&cn_id=7&prd=${date.getFullYear()}-1&p=${i}`) // popular transfer list ligue 1
         .then(response => response.data)
         .then(response => {
             const $ = cheerio.load(response);
 
             $('tbody tr').each((i, element) => {
                 transferListLigue1.push({
-                    img: $(element).find('.pl_info img').attr('src'),
-                    name: $(element).find('.pl_info .name div span').text(),
-                    flag: $(element).find('.pl_info .name div img').attr('src'),
-                    position: $(element).find('td:nth-child(1) > div > div').text().slice($(element).find('.pl_info .name div span').text().length),
+                    img: $(element).find('.scrl_brdr .tb_pl_club img').attr('src'),
+                    name: $(element).find('.scrl_brdr .tb_pl_club .name div span').text(),
+                    flag: $(element).find('.scrl_brdr .tb_pl_club .name div img').attr('src'),
+                    position: $(element).find('.scrl_brdr .tb_pl_club').text().slice($(element).find('.scrl_brdr .tb_pl_club .name div span').text().length),
                     date: $(element).find('td:nth-child(3)').text(),
-                    clubOut: $(element).find('.gray div:nth-child(1) img').attr('src'),
-                    clubOutName: $(element).find('.gray div:nth-child(1) span').text(),
-                    clubIn: $(element).find('.gray div:last-child img').attr('src'),
-                    clubInName: $(element).find('.gray div:last-child span').text(),
+                    clubOut: $(element).find('.gr:nth-child(2) .img16:nth-child(1) img').attr('src'),
+                    clubOutName: $(element).find('.gr:nth-child(2) .img16:nth-child(1) span a').text(),
+                    clubIn: $(element).find('.gr:nth-child(2) .img16:nth-child(3) img').attr('src'),
+                    clubInName: $(element).find('.gr:nth-child(2) .img16:nth-child(3) span a').text(),
                     price: $(element).find('.green').text()
                 });
             });
@@ -688,12 +724,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (A)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (A)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
             uclStandingsA.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -723,12 +759,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (B)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (B)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(4) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(4) > table tr').each((i, element) => {
             uclStandingsB.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -758,12 +794,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (C)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (C)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(6) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(6) > table tr').each((i, element) => {
             uclStandingsC.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -793,12 +829,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (D)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (D)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(8) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(8) > table tr').each((i, element) => {
             uclStandingsD.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -828,12 +864,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (E)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (E)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(10) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(10) > table tr').each((i, element) => {
             uclStandingsE.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -863,12 +899,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (F)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (F)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(12) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(12) > table tr').each((i, element) => {
             uclStandingsF.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -898,12 +934,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (G)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (G)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(14) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(14) > table tr').each((i, element) => {
             uclStandingsG.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -933,12 +969,12 @@ const parsing = async () => {
         }));
     });
 
-    await axios.get('https://www.liveresult.ru/football/Champions-League/standings') // ucl standings (H)
+    await axios.get('https://www.liveresult.ru/football/Champions-League/standings' && 'https://www.liveresult.ru/football/Champions-League/standings?st=0' && 'https://www.liveresult.ru/football/Champions-League/standings?st=1') // ucl standings (H)
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5109-regular-overall-table > div:nth-child(16) > table tr').each((i, element) => {
+        $('#t6659-regular-overall-table > div:nth-child(16) > table tr').each((i, element) => {
             uclStandingsH.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -973,7 +1009,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
             uelStandingsA.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1008,7 +1044,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(4) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(4) > table tr').each((i, element) => {
             uelStandingsB.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1043,7 +1079,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(6) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(6) > table tr').each((i, element) => {
             uelStandingsC.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1078,7 +1114,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(8) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(8) > table tr').each((i, element) => {
             uelStandingsD.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1113,7 +1149,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(10) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(10) > table tr').each((i, element) => {
             uelStandingsE.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1148,7 +1184,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(12) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(12) > table tr').each((i, element) => {
             uelStandingsF.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1183,7 +1219,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(14) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(14) > table tr').each((i, element) => {
             uelStandingsG.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1218,7 +1254,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5358-regular-overall-table > div:nth-child(16) > table tr').each((i, element) => {
+        $('#t6660-regular-overall-table > div:nth-child(16) > table tr').each((i, element) => {
             uelStandingsH.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1253,7 +1289,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(2) > table > tbody tr').each((i, element) => {
             ueclStandingsA.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1288,7 +1324,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(4) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(4) > table tr').each((i, element) => {
             ueclStandingsB.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1323,7 +1359,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(6) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(6) > table tr').each((i, element) => {
             ueclStandingsC.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1358,7 +1394,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(8) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(8) > table tr').each((i, element) => {
             ueclStandingsD.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1393,7 +1429,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(10) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(10) > table tr').each((i, element) => {
             ueclStandingsE.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1428,7 +1464,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(12) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(12) > table tr').each((i, element) => {
             ueclStandingsF.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1463,7 +1499,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(14) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(14) > table tr').each((i, element) => {
             ueclStandingsG.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -1498,7 +1534,7 @@ const parsing = async () => {
     .then(response => {
         const $ = cheerio.load(response);
 
-        $('#t5132-regular-overall-table > div:nth-child(16) > table tr').each((i, element) => {
+        $('#t6664-regular-overall-table > div:nth-child(16) > table tr').each((i, element) => {
             ueclStandingsH.push({
                 name: $(element).find('.name a').text(),
                 description: $(element).find('.num').attr('title'),
@@ -2423,424 +2459,620 @@ const parsing = async () => {
     });
 
     try {
-        const rplTopScoresRes = await fetch( // rplTopScores
-        'https://www.sport-express.ru/football/L/russia/premier/2022-2023/statistics/bombardiers/'
-        );
-        const rplTopScoresCharset = (rplTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const rplTopScoresBuf = await rplTopScoresRes.arrayBuffer();
-        const rplTopScoresHtml = iconv.decode(
-            Buffer.from(rplTopScoresBuf),
-            rplTopScoresCharset || 'windows-1251'
-        );
-        const $rplTopScores = cheerio.load(rplTopScoresHtml);
-
-        $rplTopScores('table.se19-table-statistics tr').each((i, element) => {
-            rplTopScores.push({
-                place: $rplTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $rplTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $rplTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $rplTopScores(element).find('td').eq(4).text(),
-                goals: $rplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $rplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $rplTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $rplTopScores(element).find('td:nth-child(4) div a').text()
-            });
-        });
-
-        db.query('DELETE FROM rplts', (err => {
-            if(err) throw err;
-        }));
-
-        rplTopScores.map((e) => {
-            db.query('INSERT INTO rplts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
-                if(err) throw err;
-            }));
-        });
-    }
-    catch (err) {
-        console.error(err);
-    }
-
-    try {
-        const eplTopScoresRes = await fetch( // eplTopScores
-            'https://www.sport-express.ru/football/L/foreign/england/premier/2022-2023/statistics/bombardiers/'
-        );
-        const eplTopScoresCharset = (eplTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const eplTopScoresBuf = await eplTopScoresRes.arrayBuffer();
-        const eplTopScoresHtml = iconv.decode(
-            Buffer.from(eplTopScoresBuf),
-            eplTopScoresCharset || 'windows-1251'
-        );
-        const $eplTopScores = cheerio.load(eplTopScoresHtml);
-
-        $eplTopScores('table.se19-table-statistics tr').each((i, element) => {
-            eplTopScores.push({
-                place: $eplTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $eplTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $eplTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $eplTopScores(element).find('td').eq(4).text(),
-                goals: $eplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $eplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $eplTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $eplTopScores(element).find('td:nth-child(4) div a').text()
-            });
-        });
-
-        db.query('DELETE FROM eplts', (err => {
-            if(err) throw err;
-        }));
-
-        eplTopScores.map((e) => {
-            db.query('INSERT INTO eplts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
-                if(err) throw err;
-            }));
-        });
-    }
-    catch (err) {
-        console.error(err);
-    }
-
-    try {
-        const laligaTopScoresRes = await fetch( // laligaTopScores
-            'https://www.sport-express.ru/football/L/foreign/spain/laleague/2022-2023/statistics/bombardiers/'
-        );
-        const laligaTopScoresCharset = (laligaTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const laligaTopScoresBuf = await laligaTopScoresRes.arrayBuffer();
-        const laligaTopScoresHtml = iconv.decode(
-            Buffer.from(laligaTopScoresBuf),
-            laligaTopScoresCharset || 'windows-1251'
-        );
-        const $laligaTopScores = cheerio.load(laligaTopScoresHtml);
-
-        $laligaTopScores('table.se19-table-statistics tr').each((i, element) => {
-            laligaTopScores.push({
-                place: $laligaTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $laligaTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $laligaTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $laligaTopScores(element).find('td').eq(4).text(),
-                goals: $laligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $laligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $laligaTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $laligaTopScores(element).find('td:nth-child(4) div a').text()
-            });
-        });
-
-        db.query('DELETE FROM laligats', (err => {
-            if(err) throw err;
-        }));
-
-        laligaTopScores.map((e) => {
-            db.query('INSERT INTO laligats (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
-                if(err) throw err;
-            }));
-        });
-    }
-    catch (err) {
-        console.error(err);
-    }
-
-    try {
-        const bundesligaTopScoresRes = await fetch( // bundesligaTopScores
-            'https://www.sport-express.ru/football/L/foreign/german/bundes1/2022-2023/statistics/bombardiers/'
-        );
-        const bundesligaTopScoresCharset = (bundesligaTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const bundesligaTopScoresBuf = await bundesligaTopScoresRes.arrayBuffer();
-        const bundesligaTopScoresHtml = iconv.decode(
-            Buffer.from(bundesligaTopScoresBuf),
-            bundesligaTopScoresCharset || 'windows-1251'
-        );
-        const $bundesligaTopScores = cheerio.load(bundesligaTopScoresHtml);
-
-        $bundesligaTopScores('table.se19-table-statistics tr').each((i, element) => {
-            bundesligaTopScores.push({
-                place: $bundesligaTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $bundesligaTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $bundesligaTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $bundesligaTopScores(element).find('td').eq(4).text(),
-                goals: $bundesligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $bundesligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $bundesligaTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $bundesligaTopScores(element).find('td:nth-child(4) div a').text()
-            });
-        });
-
-        db.query('DELETE FROM bundesligats', (err => {
-            if(err) throw err;
-        }));
-
-        bundesligaTopScores.map((e) => {
-            db.query('INSERT INTO bundesligats (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
-                if(err) throw err;
-            }));
-        });
-    }
-    catch (err) {
-        console.error(err);
-    }
-
-    try {
-        const serieaTopScoresRes = await fetch( // serieaTopScores
-            'https://www.sport-express.ru/football/L/foreign/italy/seriaa/2022-2023/statistics/bombardiers/'
-        );
-        const serieaTopScoresCharset = (serieaTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const serieaTopScoresBuf = await serieaTopScoresRes.arrayBuffer();
-        const serieaTopScoresHtml = iconv.decode(
-            Buffer.from(serieaTopScoresBuf),
-            serieaTopScoresCharset || 'windows-1251'
-        );
-        const $serieaTopScores = cheerio.load(serieaTopScoresHtml);
-
-        $serieaTopScores('table.se19-table-statistics tr').each((i, element) => {
-            serieaTopScores.push({
-                place: $serieaTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $serieaTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $serieaTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $serieaTopScores(element).find('td').eq(4).text(),
-                goals: $serieaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $serieaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $serieaTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $serieaTopScores(element).find('td:nth-child(4) div a').text()
-            });
-        });
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/russia/premier/2023-2024/statistics/bombardiers/';
         
-        db.query('DELETE FROM serieats', (err => {
-            if(err) throw err;
-        }));
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
+            });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const rplTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $rplTopScores = cheerio.load(rplTopScoresHtml);
 
-        serieaTopScores.map((e) => {
-            db.query('INSERT INTO serieats (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+            $rplTopScores('table.se19-table-statistics tr').each((i, element) => {
+                rplTopScores.push({
+                    place: $rplTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $rplTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $rplTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $rplTopScores(element).find('td').eq(4).text(),
+                    goals: $rplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $rplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $rplTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $rplTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM rplts', (err => {
                 if(err) throw err;
             }));
-        });
+    
+            rplTopScores.map((e) => {
+                db.query('INSERT INTO rplts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $rplTopScores to parse and manipulate the HTML data
+            // For example: $rplTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $rplTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
     }
     catch (err) {
         console.error(err);
     }
 
     try {
-        const ligue1TopScoresRes = await fetch( // ligue1TopScores
-            'https://www.sport-express.ru/football/L/foreign/france/league1/2022-2023/statistics/bombardiers/'
-        );
-        const ligue1TopScoresCharset = (ligue1TopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const ligue1TopScoresBuf = await ligue1TopScoresRes.arrayBuffer();
-        const ligue1TopScoresHtml = iconv.decode(
-            Buffer.from(ligue1TopScoresBuf),
-            ligue1TopScoresCharset || 'windows-1251'
-        );
-        const $ligue1TopScores = cheerio.load(ligue1TopScoresHtml);
-
-        $ligue1TopScores('table.se19-table-statistics tr').each((i, element) => {
-            ligue1TopScores.push({
-                place: $ligue1TopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $ligue1TopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $ligue1TopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $ligue1TopScores(element).find('td').eq(4).text(),
-                goals: $ligue1TopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $ligue1TopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $ligue1TopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $ligue1TopScores(element).find('td:nth-child(4) div a').text()
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/foreign/england/premier/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
             });
-        });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const eplTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $eplTopScores = cheerio.load(eplTopScoresHtml);
 
-        db.query('DELETE FROM ligue1ts', (err => {
-            if(err) throw err;
-        }));
-
-        ligue1TopScores.map((e) => {
-            db.query('INSERT INTO ligue1ts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+            $eplTopScores('table.se19-table-statistics tr').each((i, element) => {
+                eplTopScores.push({
+                    place: $eplTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $eplTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $eplTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $eplTopScores(element).find('td').eq(4).text(),
+                    goals: $eplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $eplTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $eplTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $eplTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM eplts', (err => {
                 if(err) throw err;
             }));
-        });
+    
+            eplTopScores.map((e) => {
+                db.query('INSERT INTO eplts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $eplTopScores to parse and manipulate the HTML data
+            // For example: $eplTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $eplTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
     }
     catch (err) {
         console.error(err);
     }
 
     try {
-        const uclTopScoresRes = await fetch( // uclTopScores
-            'https://www.sport-express.ru/football/L/eurocups/championsleague/2022-2023/statistics/bombardiers/'
-        );
-        const uclTopScoresCharset = (uclTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const uclTopScoresBuf = await uclTopScoresRes.arrayBuffer();
-        const uclTopScoresHtml = iconv.decode(
-            Buffer.from(uclTopScoresBuf),
-            uclTopScoresCharset || 'windows-1251'
-        );
-        const $uclTopScores = cheerio.load(uclTopScoresHtml);
-
-        $uclTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr').each((i, element) => {
-            uclTopScores.push({
-                place: $uclTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $uclTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $uclTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $uclTopScores(element).find('td').eq(4).text(),
-                goals: $uclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $uclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $uclTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $uclTopScores(element).find('td:nth-child(4) div a').text()
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/foreign/spain/laleague/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
             });
-        });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const laligaTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $laligaTopScores = cheerio.load(laligaTopScoresHtml);
 
-        db.query('DELETE FROM uclts', (err => {
-            if(err) throw err;
-        }));
-
-        uclTopScores.map((e) => {
-            db.query('INSERT INTO uclts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+            $laligaTopScores('table.se19-table-statistics tr').each((i, element) => {
+                laligaTopScores.push({
+                    place: $laligaTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $laligaTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $laligaTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $laligaTopScores(element).find('td').eq(4).text(),
+                    goals: $laligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $laligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $laligaTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $laligaTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM laligats', (err => {
                 if(err) throw err;
             }));
-        });
+    
+            laligaTopScores.map((e) => {
+                db.query('INSERT INTO laligats (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $laligaTopScores to parse and manipulate the HTML data
+            // For example: $laligaTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $laligaTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
     }
     catch (err) {
         console.error(err);
     }
 
     try {
-        const uelTopScoresRes = await fetch( // uelTopScores
-            'https://www.sport-express.ru/football/L/eurocups/euroleague/2022-2023/statistics/bombardiers/'
-        );
-        const uelTopScoresCharset = (uelTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const uelTopScoresBuf = await uelTopScoresRes.arrayBuffer();
-        const uelTopScoresHtml = iconv.decode(
-            Buffer.from(uelTopScoresBuf),
-            uelTopScoresCharset || 'windows-1251'
-        );
-        const $uelTopScores = cheerio.load(uelTopScoresHtml);
-
-        $uelTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr').each((i, element) => {
-            uelTopScores.push({
-                place: $uelTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $uelTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $uelTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $uelTopScores(element).find('td').eq(4).text(),
-                goals: $uelTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $uelTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $uelTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $uelTopScores(element).find('td:nth-child(4) div a').text()
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/foreign/german/bundes1/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
             });
-        });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const bundesligaTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $bundesligaTopScores = cheerio.load(bundesligaTopScoresHtml);
 
-        db.query('DELETE FROM uelts', (err => {
-            if(err) throw err;
-        }));
-
-        uelTopScores.map((e) => {
-            db.query('INSERT INTO uelts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+            $bundesligaTopScores('table.se19-table-statistics tr').each((i, element) => {
+                bundesligaTopScores.push({
+                    place: $bundesligaTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $bundesligaTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $bundesligaTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $bundesligaTopScores(element).find('td').eq(4).text(),
+                    goals: $bundesligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $bundesligaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $bundesligaTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $bundesligaTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM bundesligats', (err => {
                 if(err) throw err;
             }));
-        });
+    
+            bundesligaTopScores.map((e) => {
+                db.query('INSERT INTO bundesligats (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $bundesligaTopScores to parse and manipulate the HTML data
+            // For example: $bundesligaTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $bundesligaTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
     }
     catch (err) {
         console.error(err);
     }
 
     try {
-        const ueclTopScoresRes = await fetch( // ueclTopScores
-            'https://www.sport-express.ru/football/L/eurocups/conferenceleague/2022-2023/statistics/bombardiers/'
-        );
-        const ueclTopScoresCharset = (ueclTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const ueclTopScoresBuf = await ueclTopScoresRes.arrayBuffer();
-        const ueclTopScoresHtml = iconv.decode(
-            Buffer.from(ueclTopScoresBuf),
-            ueclTopScoresCharset || 'windows-1251'
-        );
-        const $ueclTopScores = cheerio.load(ueclTopScoresHtml);
-
-        $ueclTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr').each((i, element) => {
-            ueclTopScores.push({
-                place: $ueclTopScores(element).find('.se19-table-statistics__td--place').text(),
-                img: $ueclTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $ueclTopScores(element).find('.se19-table-statistics__td--name a').text(),
-                games: $ueclTopScores(element).find('td').eq(4).text(),
-                goals: $ueclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $ueclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $ueclTopScores(element).find('td:nth-child(4) div img').attr('src'),
-                tName: $ueclTopScores(element).find('td:nth-child(4) div a').text()
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/foreign/italy/seriaa/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
             });
-        });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const serieaTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $serieaTopScores = cheerio.load(serieaTopScoresHtml);
 
-        db.query('DELETE FROM ueclts', (err => {
-            if(err) throw err;
-        }));
-
-        ueclTopScores.map((e) => {
-            db.query('INSERT INTO ueclts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+            $serieaTopScores('table.se19-table-statistics tr').each((i, element) => {
+                serieaTopScores.push({
+                    place: $serieaTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $serieaTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $serieaTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $serieaTopScores(element).find('td').eq(4).text(),
+                    goals: $serieaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $serieaTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $serieaTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $serieaTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+            
+            db.query('DELETE FROM serieats', (err => {
                 if(err) throw err;
             }));
-        });
+    
+            serieaTopScores.map((e) => {
+                db.query('INSERT INTO serieats (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $serieaTopScores to parse and manipulate the HTML data
+            // For example: $serieaTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $serieaTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
     }
     catch (err) {
         console.error(err);
     }
 
     try {
-        const unlTopScoresRes = await fetch( // unlTopScores
-            'https://www.sport-express.ru/football/N/nation-league/stats/bombardiers/'
-        );
-        const unlTopScoresCharset = (unlTopScoresRes.headers.get('content-type') ?? '').split(/\s*;\s*/).find((/** @type {string} */ x) => x.startsWith('charset'))?.replace(/charset=/, '');
-        const unlTopScoresBuf = await unlTopScoresRes.arrayBuffer();
-        const unlTopScoresHtml = iconv.decode(
-            Buffer.from(unlTopScoresBuf),
-            unlTopScoresCharset || 'windows-1251'
-        );
-        const $unlTopScores = cheerio.load(unlTopScoresHtml);
-
-        $unlTopScores('#__layout > section > section:nth-child(2) > section.app__holder > div > div > table > tbody > tr').each((i, element) => {
-            unlTopScores.push({
-                place: $unlTopScores(element).find('.statistics__td_number').text(),
-                img: $unlTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $unlTopScores(element).find('.statistics__td_player a').text(),
-                games: $unlTopScores(element).find('td').eq(4).text(),
-                goals: $unlTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
-                assists: '(' + $unlTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
-                tLogo: $unlTopScores(element).find('td:nth-child(4) .flag img').attr('src'),
-                tName: $unlTopScores(element).find('td:nth-child(4) .name a').text()
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/foreign/france/league1/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
             });
-        });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const ligue1TopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $ligue1TopScores = cheerio.load(ligue1TopScoresHtml);
 
-        db.query('DELETE FROM unlts', (err => {
-            if(err) throw err;
-        }));
-
-        unlTopScores.map((e) => {
-            db.query('INSERT INTO unlts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+            $ligue1TopScores('table.se19-table-statistics tr').each((i, element) => {
+                ligue1TopScores.push({
+                    place: $ligue1TopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $ligue1TopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $ligue1TopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $ligue1TopScores(element).find('td').eq(4).text(),
+                    goals: $ligue1TopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $ligue1TopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $ligue1TopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $ligue1TopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM ligue1ts', (err => {
                 if(err) throw err;
             }));
-        });
+    
+            ligue1TopScores.map((e) => {
+                db.query('INSERT INTO ligue1ts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $ligue1TopScores to parse and manipulate the HTML data
+            // For example: $ligue1TopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $ligue1TopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
     }
     catch (err) {
         console.error(err);
     }
 
-    await axios.get('https://www.championat.com/football/_euro/tournament/5287/statistic/player/bombardir/')
-    .then(response => response.data)
-    .then(response => {
-        const $ = cheerio.load(response);
-
-        $('body > div.page > div.mc-page.js-main-content > div.mc-page-content.tournament > div.page-content > div > div.js-table-component > table > tbody > tr').each((i, element) => {
-            euroQualTopScores.push({
-                place: $(element).find('td.table-responsive__row-item._center._hidden-td').text(),
-                img: $(element).find('.se19-table-statistics__td--img a img').attr('src'),
-                player: $(element).find('td.table-responsive__row-item._player.football._order_1._wm_basis_35._left-padding-cell > a > span.table-item__name').text(),
-                games: $(element).find('td.table-responsive__row-item._pstat-game.football._order_3').text(),
-                goals: $(element).find('td.table-responsive__row-item._data.football._order_2').text(),
-                assists: $(element).find('td.table-responsive__row-item._pen.football._order_6._desktop').text(),
-                tLogo: $(element).find('td.table-responsive__row-item._player.football._order_1._wm_basis_35._left-padding-cell > a > span.table-item__flag > img').attr('src'),
-                tName: $(element).find('td.table-responsive__row-item._player.football._order_1._wm_basis_35._left-padding-cell > a > span.table-item__flag > img').attr('title')
+    try {
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/eurocups/championsleague/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
             });
-        });
-    })
-    .catch(err => console.log(err));
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const uclTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $uclTopScores = cheerio.load(uclTopScoresHtml);
 
-    db.query('DELETE FROM euroqualts', (err => {
-        if(err) throw err;
-    }));
+            $uclTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr').each((i, element) => {
+                uclTopScores.push({
+                    place: $uclTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $uclTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $uclTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $uclTopScores(element).find('td').eq(4).text(),
+                    goals: $uclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $uclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $uclTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $uclTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM uclts', (err => {
+                if(err) throw err;
+            }));
+    
+            uclTopScores.map((e) => {
+                db.query('INSERT INTO uclts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $uclTopScores to parse and manipulate the HTML data
+            // For example: $uclTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $uclTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
+    }
+    catch (err) {
+        console.error(err);
+    }
 
-    euroQualTopScores.map((e) => {
-        db.query('INSERT INTO euroqualts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
-            if(err) throw err;
-        }));
-    });
+    try {
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/eurocups/euroleague/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
+            });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const uelTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $uelTopScores = cheerio.load(uelTopScoresHtml);
+
+            $uelTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr').each((i, element) => {
+                uelTopScores.push({
+                    place: $uelTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $uelTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $uelTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $uelTopScores(element).find('td').eq(4).text(),
+                    goals: $uelTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $uelTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $uelTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $uelTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM uelts', (err => {
+                if(err) throw err;
+            }));
+    
+            uelTopScores.map((e) => {
+                db.query('INSERT INTO uelts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $uelTopScores to parse and manipulate the HTML data
+            // For example: $uelTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $uelTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
+    }
+    catch (err) {
+        console.error(err);
+    }
+
+    try {
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/eurocups/conferenceleague/2023-2024/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
+            });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const ueclTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $ueclTopScores = cheerio.load(ueclTopScoresHtml);
+
+            $ueclTopScores('body > div.se-page-wrapper > section > div.se-grid2col.se-grid2col--one > div > div > div > table > tbody > tr').each((i, element) => {
+                ueclTopScores.push({
+                    place: $ueclTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $ueclTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $ueclTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $ueclTopScores(element).find('td').eq(4).text(),
+                    goals: $ueclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $ueclTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $ueclTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $ueclTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM ueclts', (err => {
+                if(err) throw err;
+            }));
+    
+            ueclTopScores.map((e) => {
+                db.query('INSERT INTO ueclts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $ueclTopScores to parse and manipulate the HTML data
+            // For example: $ueclTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $ueclTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
+    }
+    catch (err) {
+        console.error(err);
+    }
+
+    try {
+        try {
+            const url =
+              'https://www.sport-express.ru/football/N/nation-league/stats/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
+            });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const unlTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $unlTopScores = cheerio.load(unlTopScoresHtml);
+
+            $unlTopScores('#__layout > section > section:nth-child(2) > section.app__holder > div > div > table > tbody > tr').each((i, element) => {
+                unlTopScores.push({
+                    place: $unlTopScores(element).find('.statistics__td_number').text(),
+                    img: $unlTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $unlTopScores(element).find('.statistics__td_player a').text(),
+                    games: $unlTopScores(element).find('td').eq(4).text(),
+                    goals: $unlTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $unlTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $unlTopScores(element).find('td:nth-child(4) .flag img').attr('src'),
+                    tName: $unlTopScores(element).find('td:nth-child(4) .name a').text()
+                });
+            });
+    
+            db.query('DELETE FROM unlTS', (err => {
+                if(err) throw err;
+            }));
+    
+            unlTopScores.map((e) => {
+                db.query('INSERT INTO unlTS (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $unlTopScores to parse and manipulate the HTML data
+            // For example: $unlTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $unlTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
+    }
+    catch (err) {
+        console.error(err);
+    }
+
+    try {
+        try {
+            const url =
+              'https://www.sport-express.ru/football/L/europe/2024/qualify/statistics/bombardiers/';
+        
+            // Fetch the data using Axios
+            const response = await axios.get(url, {
+              responseType: 'arraybuffer', // Tell Axios to return the response as an ArrayBuffer
+            });
+        
+            // Extract the charset from the response headers
+            const contentType = response.headers['content-type'] || '';
+            const charset = contentType.split(/\s*;\s*/).find((x) => x.startsWith('charset'))?.replace(/charset=/, '');
+        
+            // Decode the response using iconv-lite
+            const euroQualTopScoresHtml = iconv.decode(response.data, charset || 'windows-1251');
+        
+            // Load the HTML using cheerio
+            const $euroQualTopScores = cheerio.load(euroQualTopScoresHtml);
+
+            $euroQualTopScores('table.se19-table-statistics tr').each((i, element) => {
+                euroQualTopScores.push({
+                    place: $euroQualTopScores(element).find('.se19-table-statistics__td--place').text(),
+                    img: $euroQualTopScores(element).find('.se19-table-statistics__td--img a img').attr('src'),
+                    player: $euroQualTopScores(element).find('.se19-table-statistics__td--name a').text(),
+                    games: $euroQualTopScores(element).find('td').eq(4).text(),
+                    goals: $euroQualTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[0],
+                    assists: '(' + $euroQualTopScores(element).find('td').eq(5).text().replace(/\s/g, '').split('(')[1],
+                    tLogo: $euroQualTopScores(element).find('td:nth-child(4) div img').attr('src'),
+                    tName: $euroQualTopScores(element).find('td:nth-child(4) div a').text()
+                });
+            });
+    
+            db.query('DELETE FROM euroqualts', (err => {
+                if(err) throw err;
+            }));
+    
+            euroQualTopScores.map((e) => {
+                db.query('INSERT INTO euroqualts (place, img, player, games, goals, pen, tLogo, tName) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.place, e.img, e.player, e.games, e.goals, e.assists, e.tLogo, e.tName], (err => {
+                    if(err) throw err;
+                }));
+            });
+        
+            // Now you can use $euroQualTopScores to parse and manipulate the HTML data
+            // For example: $euroQualTopScores('h1').text() will give you the text content of the first <h1> element
+        
+            // You can return or do further processing with $euroQualTopScores here
+        
+          } catch (error) {
+            console.error('Error fetching data:', error);
+          }
+    }
+    catch (err) {
+        console.error(err);
+    }
 
     await axios.get('https://soccer365.ru/ranking/fifa/') // fifa ranking
     .then(response => response.data)
@@ -2942,13 +3174,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/rfpl/') // rpl last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D0%B9%D1%81%D0%BA%D0%B0%D1%8F_%D0%BF%D1%80%D0%B5%D0%BC%D1%8C%D0%B5%D1%80-%D0%BB%D0%B8%D0%B3%D0%B0') // rpl last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         rplInfo = rplInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-e2da8df976be4920 > tbody > tr:nth-child(11) td a').text().split('(')[0]
         }));
     })
     .catch(err => console.log(err));
@@ -2985,13 +3217,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/epl/') // epl last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%90%D0%BD%D0%B3%D0%BB%D0%B8%D0%B9%D1%81%D0%BA%D0%B0%D1%8F_%D0%9F%D1%80%D0%B5%D0%BC%D1%8C%D0%B5%D1%80-%D0%BB%D0%B8%D0%B3%D0%B0') // epl last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         eplInfo = eplInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-c99475b3c7e99a88 > tbody > tr:nth-child(13) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3002,7 +3234,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         eplInfo = eplInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-7ee08c9a5c78c3ed > tbody > tr:nth-child(14) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-c99475b3c7e99a88 > tbody > tr:nth-child(14) td a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3088,13 +3320,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/la-liga/') // laliga last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%A7%D0%B5%D0%BC%D0%BF%D0%B8%D0%BE%D0%BD%D0%B0%D1%82_%D0%98%D1%81%D0%BF%D0%B0%D0%BD%D0%B8%D0%B8_%D0%BF%D0%BE_%D1%84%D1%83%D1%82%D0%B1%D0%BE%D0%BB%D1%83') // laliga last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         laligaInfo = laligaInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-884dd80c62af32df > tbody > tr:nth-child(12) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3105,7 +3337,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         laligaInfo = laligaInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-d57b29b3923a079c > tbody > tr:nth-child(13) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-884dd80c62af32df > tbody > tr:nth-child(13) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3191,13 +3423,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/seria-a/') // seriea last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%A7%D0%B5%D0%BC%D0%BF%D0%B8%D0%BE%D0%BD%D0%B0%D1%82_%D0%98%D1%82%D0%B0%D0%BB%D0%B8%D0%B8_%D0%BF%D0%BE_%D1%84%D1%83%D1%82%D0%B1%D0%BE%D0%BB%D1%83_(%D0%A1%D0%B5%D1%80%D0%B8%D1%8F_A)') // seriea last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         serieaInfo = serieaInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-4cd68abf34afce30 > tbody > tr:nth-child(12) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3208,7 +3440,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         serieaInfo = serieaInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-74cb2b48a3f6d385 > tbody > tr:nth-child(13) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-4cd68abf34afce30 > tbody > tr:nth-child(13) td a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3294,13 +3526,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/bundesliga/') // bundesliga last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%A7%D0%B5%D0%BC%D0%BF%D0%B8%D0%BE%D0%BD%D0%B0%D1%82_%D0%93%D0%B5%D1%80%D0%BC%D0%B0%D0%BD%D0%B8%D0%B8_%D0%BF%D0%BE_%D1%84%D1%83%D1%82%D0%B1%D0%BE%D0%BB%D1%83') // bundesliga last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         bundesligaInfo = bundesligaInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-489a75b6affeb739 > tbody > tr:nth-child(12) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3311,7 +3543,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         bundesligaInfo = bundesligaInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-c4cf1e9f425e2c0e > tbody > tr:nth-child(13) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-489a75b6affeb739 > tbody > tr:nth-child(13) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3397,13 +3629,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/ligue-1/') // ligue1 last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%A7%D0%B5%D0%BC%D0%BF%D0%B8%D0%BE%D0%BD%D0%B0%D1%82_%D0%A4%D1%80%D0%B0%D0%BD%D1%86%D0%B8%D0%B8_%D0%BF%D0%BE_%D1%84%D1%83%D1%82%D0%B1%D0%BE%D0%BB%D1%83') // ligue1 last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         ligue1Info = ligue1Info.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-4eb098bd12ab9396 > tbody > tr:nth-child(12) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3414,7 +3646,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         ligue1Info = ligue1Info.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-5112ef9b042787db > tbody > tr:nth-child(13) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-4eb098bd12ab9396 > tbody > tr:nth-child(13) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3500,13 +3732,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/ucl/') // ucl last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%9B%D0%B8%D0%B3%D0%B0_%D1%87%D0%B5%D0%BC%D0%BF%D0%B8%D0%BE%D0%BD%D0%BE%D0%B2_%D0%A3%D0%95%D0%A4%D0%90') // ucl last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         uclInfo = uclInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-c41da1aeb6e0a4cc.vcard > tbody > tr:nth-child(10) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3517,7 +3749,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         uclInfo = uclInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-b0df1c23385bf4f9.vcard > tbody > tr:nth-child(11) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-c41da1aeb6e0a4cc.vcard > tbody > tr:nth-child(11) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3603,13 +3835,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/liga-europa/') // uel last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%9B%D0%B8%D0%B3%D0%B0_%D0%95%D0%B2%D1%80%D0%BE%D0%BF%D1%8B_%D0%A3%D0%95%D0%A4%D0%90') // uel last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         uelInfo = uelInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-48095d73b886d1f6.vcard > tbody > tr:nth-child(9) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3620,7 +3852,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         uelInfo = uelInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-c7a44ef645d1233b.vcard > tbody > tr:nth-child(10) > td > a').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-48095d73b886d1f6.vcard > tbody > tr:nth-child(10) td a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3706,13 +3938,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/uecl/') // uecl last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%9B%D0%B8%D0%B3%D0%B0_%D0%BA%D0%BE%D0%BD%D1%84%D0%B5%D1%80%D0%B5%D0%BD%D1%86%D0%B8%D0%B9_%D0%A3%D0%95%D0%A4%D0%90') // uecl last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         ueclInfo = ueclInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-3e70e33d6581f5c5.vcard > tbody > tr:nth-child(9) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3723,7 +3955,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         ueclInfo = ueclInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-3cdf4dcef1db6aa2.vcard > tbody > tr:nth-child(10) > td > a:last-child').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-3e70e33d6581f5c5.vcard > tbody > tr:nth-child(10) td a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3874,7 +4106,7 @@ const parsing = async () => {
     }));
 
     euQualResults.map((e) => {
-        db.query('INSERT INTO euQualresults (round, hName, aName, hLogo, aLogo, hScore, aScore, dateTime) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.round, e.hName, e.aName, e.hLogo, e.aLogo, e.hScore, e.aScore, e.dateTime], (err => {
+        db.query('INSERT INTO euqualresults (round, hName, aName, hLogo, aLogo, hScore, aScore, dateTime) VALUES(?, ?, ?, ?, ?, ?, ?, ?)', [e.round, e.hName, e.aName, e.hLogo, e.aLogo, e.hScore, e.aScore, e.dateTime], (err => {
             if(err) throw err;
         }));
     });
@@ -3890,13 +4122,13 @@ const parsing = async () => {
     })
     .catch(err => console.log(err));
 
-    await axios.get('https://www.sports.ru/nations-league/') // unl last winner
+    await axios.get('https://ru.wikipedia.org/wiki/%D0%9B%D0%B8%D0%B3%D0%B0_%D0%BD%D0%B0%D1%86%D0%B8%D0%B9_%D0%A3%D0%95%D0%A4%D0%90') // unl last winner
     .then(response => response.data)
     .then(response => {
         const $ = cheerio.load(response);
 
         unlInfo = unlInfo.map((item) => ({ ...item,
-            lastWinner: $('#branding-layout > div > div.contentLayout.js-active > div.c-tag-header.tag-main-block > div > div.short-info > table > tbody > tr:nth-child(2) > td > a').text()
+            lastWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-136078cd8cf5d3c8.vcard > tbody > tr:nth-child(8) > td > a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3907,7 +4139,7 @@ const parsing = async () => {
         const $ = cheerio.load(response);
 
         unlInfo = unlInfo.map((item) => ({ ...item,
-            mostWinner: $('#mw-content-text > div.mw-parser-output > table.infobox.infobox-95f48d5a7d418b2d.vcard > tbody > tr:nth-child(9) > td > a:nth-child(2)').text()
+            mostWinner: $('#mw-content-text > div.mw-content-ltr.mw-parser-output > table.infobox.infobox-136078cd8cf5d3c8.vcard > tbody > tr:nth-child(9) td a').text()
         }));
     })
     .catch(err => console.log(err));
@@ -3992,6 +4224,7 @@ setInterval(() => {
     liveMatches.splice(0, liveMatches.length);
     liveMatchesLinks.splice(0, liveMatchesLinks.length);
     liveMatchesLeagueNameRoundDate.splice(0, liveMatchesLeagueNameRoundDate.length);
+    expectedMatches.splice(0,expectedMatches.length);
 }, 60000);
 
 setInterval(() => {

@@ -6,5 +6,6 @@ router.get('/live', controller.live);
 router.get('/ended', controller.ended);
 router.post('/expected', controller.expectedPost);
 router.post('/favLive', controller.favLive);
+router.get('/expected', controller.expected);
 
 module.exports = router;

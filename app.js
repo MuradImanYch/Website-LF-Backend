@@ -26,9 +26,13 @@ const resultsRoutes = require('./routes/results.js');
 const leagueSeasonInfoRoutes = require('./routes/leagueSeasonInfo.js');
 const likeRoutes = require('./routes/like.js');
 const viewsRoutes = require('./routes/views.js');
+const sitemapRoutes = require('./routes/sitemap.js');
+const suggestionsComplaintsRoutes = require('./routes/suggestionsComplaints.js');
+const iptvParsing = require('./routes/iptvParsing.js');
 require('./controllers/parser.js');
 const app = express();
 
+// app.use(express.static(path.join(__dirname + "/public")));
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(cors());
 app.use(express.json());
@@ -48,6 +52,9 @@ app.use('/results', resultsRoutes);
 app.use('/leagueinfo', leagueSeasonInfoRoutes);
 app.use('/like', likeRoutes);
 app.use('/views', viewsRoutes);
+app.use('/sitemap', sitemapRoutes);
+app.use('/suggestionsComplaints', suggestionsComplaintsRoutes);
+app.use('/iptvParsing', iptvParsing);
 app.use(cookieParser());
 
 const storage = multer.diskStorage({ // multer handler
@@ -101,9 +108,9 @@ app.post('/delUpload', (req, res) => {
     }
 });
 
-/* app.get('*', (req, res) =>{
+app.get('*', (req, res) =>{
     res.sendFile(path.join(__dirname + "/public/index.html"));
-}); */
+});
 
 app.listen(PORT, (err) => {
     if(err) return err;

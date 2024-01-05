@@ -27,3 +27,10 @@ module.exports.favLive = (req, res) => {
         // res.send(JSON.parse(result[0].favMatchesLive));
     }));
 }
+
+module.exports.expected = (req, res) => {
+    db.query('SELECT * FROM expectedmatches', ((err, result) => {
+        if(err) throw err;
+        res.send(result);
+    }));
+}

@@ -24,6 +24,6 @@ module.exports.post = (req, res) => {
 module.exports.checkIP = (req, res) => {
   db.query(`SELECT likes FROM news WHERE id = ${req.body.id}`, ((err, results) => {
     if(err) throw err;
-    res.send(results[0].likes?.split(',') !== undefined && JSON.stringify(Array.from(results[0].likes.split(',')).indexOf(req.body.clientIP)));
+    res.send(results[0]?.likes?.split(',') !== undefined && JSON.stringify(Array.from(results[0].likes.split(',')).indexOf(req.body.clientIP)));
   }));
 }

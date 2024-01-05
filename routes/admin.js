@@ -10,5 +10,6 @@ router.post('/editNews', controller.editNews);
 router.post('/delBroadcast', controller.delBroadcast);
 router.post('/editBroadcast', controller.editBroadcast);
 router.post('/findEditedBroadcast', controller.findEditedBroadcast);
+router.post('/generateNews', controller.generateNews);
 
 module.exports = router;

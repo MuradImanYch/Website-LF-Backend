@@ -64,7 +64,7 @@ module.exports.uecl = (req, res) => {
 }
 
 module.exports.euQual = (req, res) => {
-    db.query('SELECT * FROM euQualresults', ((err, result) => {
+    db.query('SELECT * FROM euqualresults', ((err, result) => {
         if(err) throw err;
         res.send(result);
     }));
